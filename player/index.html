@@ -13,9 +13,9 @@
   body{margin:0;background:var(--bg);color:var(--text);
        font:14px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",Segoe UI,sans-serif;
        -webkit-font-smoothing:antialiased;overflow:hidden}
-  #stage{position:fixed;inset:0 0 var(--barh,150px) 0}
+  #stage{position:fixed;inset:0 0 var(--barh,188px) 0}
   canvas{display:block;width:100%;height:100%}
-  #bar{position:fixed;left:0;right:0;bottom:0;height:var(--barh,150px);
+  #bar{position:fixed;left:0;right:0;bottom:0;height:var(--barh,188px);
        background:var(--panel);border-top:1px solid var(--line);
        padding:10px 16px;display:flex;flex-direction:column;gap:9px}
   .row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
@@ -69,11 +69,23 @@
       </select>
     </label>
     <label>Overlay vol <input id="ovol" type="range" min="0" max="100" value="55"><b id="ovolv">55</b></label>
+    <label>Sync <input id="soff" type="range" min="-200" max="200" value="0"><b id="soffv">0ms</b></label>
     <div class="sep"></div>
     <label><input id="loopOn" type="checkbox"> Loop bars
       <input id="loopA" type="number" value="43" min="1"> –
       <input id="loopB" type="number" value="49" min="1"></label>
     <button id="lick">Lick section</button>
+  </div>
+  <div class="row">
+    <button id="btnP">Percussion</button>
+    <label>Perc vol <input id="pcvol" type="range" min="0" max="100" value="45"></label>
+    <label>Feel
+      <select id="pcstyle">
+        <option value="shaker">shaker only</option>
+        <option value="full" selected>shaker + side-stick</option>
+        <option value="click">click track</option>
+      </select>
+    </label>
   </div>
 </div>
 
@@ -85,6 +97,8 @@ let D=null, LO=29, HI=96, notes=[], W=0,H=0,dpr=1;
 let t=0, playing=false, speed=1, simp=18, showR=true, showL=true, last=0;
 const PPS=190;
 let audio=null, sched=new Set(), pianoGain=null, BUF={}, BASES=[];
+let percGain=null, NOISE=null, percOn=false, lastTick=-1;
+let syncOff=0, aRef=null, wRef=0;          // overlay clock reference
 const ov=$('ov');
 
 /* ---------- acoustic piano: additive multisample ---------- */
@@ -92,35 +106,94 @@ function ac(){
   if(!audio){
     audio=new (window.AudioContext||window.webkitAudioContext)();
     pianoGain=audio.createGain(); pianoGain.gain.value=0.85; pianoGain.connect(audio.destination);
+    percGain =audio.createGain(); percGain.gain.value=0.45;  percGain.connect(audio.destination);
   }
   return audio;
+}
+
+/* ---------- percussion: shaker + side-stick ---------- */
+function noiseBuf(){
+  if(!NOISE){
+    const a=ac(), n=Math.floor(a.sampleRate*0.6);
+    NOISE=a.createBuffer(1,n,a.sampleRate);
+    const d=NOISE.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  }
+  return NOISE;
+}
+function hit(kind,accent){
+  const a=ac(), now=a.currentTime;
+  const src=a.createBufferSource(); src.buffer=noiseBuf(); src.loop=true;
+  const f=a.createBiquadFilter(), g=a.createGain();
+  let dec,amp;
+  if(kind==='shaker'){                       // egg shaker: bright, very short
+    f.type='bandpass'; f.frequency.value=accent?7600:6600; f.Q.value=1.1;
+    dec=accent?0.052:0.030; amp=accent?0.34:0.15;
+  } else if(kind==='stick'){                 // rim / side-stick on 2 and 4
+    f.type='bandpass'; f.frequency.value=1750; f.Q.value=3.2;
+    dec=0.055; amp=0.30;
+  } else {                                   // plain click track
+    f.type='bandpass'; f.frequency.value=accent?2400:1500; f.Q.value=6;
+    dec=0.030; amp=accent?0.38:0.20;
+  }
+  g.gain.setValueAtTime(0,now);
+  g.gain.linearRampToValueAtTime(amp,now+0.0015);
+  g.gain.exponentialRampToValueAtTime(0.0004,now+dec);
+  src.connect(f); f.connect(g); g.connect(percGain);
+  src.start(now, Math.random()*0.5); src.stop(now+dec+0.02);
+}
+function tickPerc(){
+  if(!percOn) return;
+  const style=$('pcstyle').value;
+  const unit = style==='click' ? D.beat : D.beat/2;          // click on beats, shaker on 8ths
+  const i=Math.floor((t-D.downbeat)/unit);
+  if(i===lastTick||i<0) return;
+  lastTick=i;
+  if(style==='click'){ hit('click', i%4===0); return; }
+  const off=i%2===1, beatInBar=Math.floor(i/2)%4;
+  hit('shaker', !off && beatInBar===0);
+  if(style==='full' && !off && (beatInBar===1||beatInBar===3)) hit('stick',false);
 }
 function buildPiano(){
   const a=ac(), sr=a.sampleRate;
   BASES=[24,36,48,60,72,84,96];
   for(const base of BASES){
     const f0=440*Math.pow(2,(base-69)/12);
-    const dur=Math.max(1.1, 5.2*Math.pow(0.72,(base-24)/12));   // low notes ring longer
+    const dur=Math.max(1.4, 7.0*Math.pow(0.74,(base-24)/12));   // low notes ring far longer
     const n=Math.floor(sr*dur), buf=a.createBuffer(1,n,sr), d=buf.getChannelData(0);
-    const B=0.00035+0.0009*Math.max(0,(base-60)/36);            // string inharmonicity
+    const B=0.00028+0.0011*Math.max(0,(base-57)/39);            // string stiffness / inharmonicity
+    const STRIKE=1/8;                                           // hammer hits ~1/8 along the string
+    const nStr = base<40 ? 2 : 3;                               // bass = 2 strings, mid/treble = 3
     const parts=[];
-    for(let k=1;k<=28;k++){
+    for(let k=1;k<=34;k++){
       const fk=f0*k*Math.sqrt(1+B*k*k);
       if(fk>sr*0.45) break;
-      parts.push({w:2*Math.PI*fk,
-                  a:1/Math.pow(k,1.28)*(k%2?1:0.72),
-                  dec:(dur*0.92)/Math.pow(k,0.55),
-                  ph:Math.random()*6.283});
+      // strike-point cancellation: notches out the 8th, 16th... partial. Very piano.
+      const strikeAmp=Math.abs(Math.sin(Math.PI*k*STRIKE));
+      const amp=strikeAmp/Math.pow(k,1.18);
+      // double decay: quick initial loss, then a long tail (two string polarisations)
+      const fast=(dur*0.16)/Math.pow(k,0.80);
+      const slow=(dur*1.00)/Math.pow(k,0.42);
+      for(let s=0;s<nStr;s++){
+        // unison strings detuned a fraction of a cent — this is the shimmer
+        const cents=(s-(nStr-1)/2)*(base<40?1.4:0.9);
+        parts.push({w:2*Math.PI*fk*Math.pow(2,cents/1200),
+                    a:amp/nStr, fast, slow, ph:Math.random()*6.283});
+      }
     }
     let peak=0;
+    // hammer thump: lowpassed noise, one-pole
+    let lp=0, lpc=Math.exp(-2*Math.PI*900/sr);
     for(let i=0;i<n;i++){
       const s=i/sr; let v=0;
-      for(const p of parts) v += p.a*Math.exp(-s/p.dec)*Math.sin(p.w*s+p.ph);
-      if(s<0.006) v*=s/0.006;                                   // hammer attack
-      if(s<0.010) v+=(Math.random()*2-1)*0.28*(1-s/0.010)*Math.exp(-s/0.004);
+      for(const p of parts)
+        v += p.a*(0.62*Math.exp(-s/p.fast)+0.38*Math.exp(-s/p.slow))*Math.sin(p.w*s+p.ph);
+      lp = lpc*lp + (1-lpc)*(Math.random()*2-1);
+      if(s<0.035) v += lp*0.55*Math.exp(-s/0.007);              // felt hammer contact
+      if(s<0.004) v *= s/0.004;                                 // no click at t=0
       d[i]=v; const av=Math.abs(v); if(av>peak) peak=av;
     }
-    const g=0.92/(peak||1);
+    const g=0.9/(peak||1);
     for(let i=0;i<n;i++) d[i]*=g;
     BUF[base]=buf;
   }
@@ -131,14 +204,23 @@ function playNote(midi,dur,vel,hand){
   if(!buf) return;
   const src=a.createBufferSource(); src.buffer=buf;
   src.playbackRate.value=Math.pow(2,(midi-base)/12);
+  const v=Math.max(0,Math.min(1,vel/127));
+  // softer strike => darker tone, not merely quieter. This is most of the realism.
+  const lp=a.createBiquadFilter();
+  lp.type='lowpass';
+  lp.frequency.value=Math.min(15000, 700+9000*Math.pow(v,1.45));
+  lp.Q.value=0.5;
+  // gentle body resonance so it isn't a bare string
+  const body=a.createBiquadFilter();
+  body.type='peaking'; body.frequency.value=190; body.Q.value=0.8; body.gain.value=3.5;
   const g=a.createGain();
-  const amp=Math.min(0.9,(0.30+0.70*(vel/127)))*(hand==='l'?0.80:1)*0.55;
-  const now=a.currentTime, hold=Math.max(0.10,Math.min(dur/speed,3.0));
+  const amp=(0.22+0.78*Math.pow(v,1.15))*(hand==='l'?0.82:1)*0.5;
+  const now=a.currentTime, hold=Math.max(0.10,Math.min(dur/speed,3.5));
   g.gain.setValueAtTime(amp,now);
   g.gain.setValueAtTime(amp,now+hold);
-  g.gain.exponentialRampToValueAtTime(0.0006,now+hold+0.22);    // damper release
-  src.connect(g); g.connect(pianoGain);
-  src.start(now); src.stop(now+hold+0.30);
+  g.gain.exponentialRampToValueAtTime(0.0006,now+hold+0.28);    // felt damper, not a hard cut
+  src.connect(lp); lp.connect(body); body.connect(g); g.connect(pianoGain);
+  src.start(now); src.stop(now+hold+0.36);
 }
 
 /* ---------- geometry ---------- */
@@ -163,14 +245,16 @@ const timeOfBar = b => D.downbeat+(b-1)*D.bar;
 const visible = n => (n.h==='r'?showR:showL) && n.v>=simp;
 function chordAt(s){ let c='—'; for(const k of D.chords){ if(k.t<=s+0.02) c=k.name; else break; } return c; }
 const fmt = s => `${Math.floor(Math.max(s,0)/60)}:${String(Math.floor(Math.max(s,0)%60)).padStart(2,'0')}`;
-const absTime = s => s + D.downbeat;          // player clock -> audio file clock
+const absTime = s => s + D.downbeat + syncOff;   // player clock -> audio file clock
 
-/* ---------- overlay sync ---------- */
+/* ---------- overlay sync ----------
+   When an overlay is playing it is the MASTER clock: visuals read from it and
+   interpolate between its coarse updates. Two clocks can't drift if there's one clock. */
+const ovLive = () => !!$('src').value && ov.readyState>=2;
 function syncOverlay(force){
-  if(!ov.src || !$('src').value) return;
-  const want=Math.max(0,absTime(t));
-  if(force || Math.abs(ov.currentTime-want)>0.16) ov.currentTime=want;
+  if(!ovLive()) return;
   ov.playbackRate=speed;
+  if(force){ ov.currentTime=Math.max(0,absTime(t)); aRef=null; }
   if(playing && ov.paused) ov.play().catch(()=>{});
   if(!playing && !ov.paused) ov.pause();
 }
@@ -180,10 +264,17 @@ function frame(ts){
   if(!D){ requestAnimationFrame(frame); return; }
   const dt=last?Math.min((ts-last)/1000,0.05):0; last=ts;
   if(playing){
-    t+=dt*speed;
+    // one clock: if an overlay is running, it drives time; otherwise the frame loop does
+    if(ovLive() && !ov.paused){
+      const ct=ov.currentTime, wall=ts/1000;
+      if(aRef===null || Math.abs(ct-aRef)>0.0005){ aRef=ct; wRef=wall; }
+      t = (aRef + (wall-wRef)*speed) - D.downbeat - syncOff;
+    } else {
+      aRef=null; t+=dt*speed;
+    }
     if($('loopOn').checked){
       const a=timeOfBar(+$('loopA').value), b=timeOfBar(+$('loopB').value+1);
-      if(t>=b||t<a-0.001){ t=a; sched.clear(); syncOverlay(true); }
+      if(t>=b||t<a-0.001){ t=a; sched.clear(); lastTick=-1; syncOverlay(true); }
     }
     if(t>D.duration){ t=D.duration; playing=false; $('play').textContent='Play'; syncOverlay(); }
     for(const n of notes){
@@ -191,6 +282,7 @@ function frame(ts){
       if(n.t>t-0.09 && visible(n) && !sched.has(n)){ sched.add(n); playNote(n.p,n.d,n.v,n.h); }
     }
     if(sched.size>500) sched.clear();
+    tickPerc();
   }
   render();
   requestAnimationFrame(frame);
@@ -245,8 +337,14 @@ function render(){
 /* ---------- controls ---------- */
 $('play').onclick=()=>{ ac().resume(); playing=!playing; sched.clear();
   $('play').textContent=playing?'Pause':'Play'; syncOverlay(true); };
-$('rew').onclick=()=>{ t=0; sched.clear(); syncOverlay(true); };
-$('seek').oninput=e=>{ t=e.target.value/1000*D.duration; sched.clear(); syncOverlay(true); };
+$('rew').onclick=()=>{ t=0; sched.clear(); lastTick=-1; syncOverlay(true); };
+$('seek').oninput=e=>{ t=e.target.value/1000*D.duration; sched.clear(); lastTick=-1; syncOverlay(true); };
+$('btnP').onclick=()=>{ ac().resume(); percOn=!percOn; lastTick=-1;
+  $('btnP').classList.toggle('on',percOn); };
+$('pcvol').oninput=e=>{ if(percGain) percGain.gain.value=e.target.value/100; };
+$('pcstyle').onchange=()=>{ lastTick=-1; };
+$('soff').oninput=e=>{ syncOff=+e.target.value/1000;
+  $('soffv').textContent=e.target.value+'ms'; aRef=null; syncOverlay(true); };
 $('btnR').onclick=()=>{ showR=!showR; $('btnR').classList.toggle('on',showR); };
 $('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); };
 $('speed').oninput=e=>{ speed=e.target.value/100; $('speedv').textContent=e.target.value+'%'; syncOverlay(true); };
