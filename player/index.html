@@ -125,16 +125,16 @@
         <label class="chk" title="the Bass stem, transcribed — there is no bassist when you play this alone"><input id="bassOn" type="checkbox" checked> Bass line</label>
         <span class="cap" title="hide notes that barely sound in the recording">Hide faint</span>
         <input id="simp" type="range" min="0" max="40" value="0">
-        <span class="val wide" id="simpv">all 1903</span>
+        <span class="val wide" id="simpv"></span>
       </div>
     </div>
 
     <div class="group"><span class="cap">Reach</span>
       <div class="items">
         <select id="reach">
-          <option value="12" selected>octave max</option>
+          <option value="12">octave max</option>
           <option value="16">10th max</option>
-          <option value="99">off — as transcribed</option>
+          <option value="99" selected>off — as transcribed</option>
         </select>
       </div>
     </div>
@@ -180,6 +180,7 @@
           <option value="song.mp3" data-keys="1" data-drums="1">full song</option>
         </select>
         <span class="cap">Vol</span><input id="ovol" type="range" min="0" max="100" value="70">
+        <span class="val wide" id="ovnote"></span>
       </div>
     </div>
   </div>
@@ -205,7 +206,7 @@ let NOISE=null, percOn=false, lastTick=-1;
 /* Output latency compensation. No control on it: on wired or built-in output the
    delay is a few milliseconds and invisible. Bluetooth runs 100-300ms and would
    need this — put a slider back on it if that ever comes up. */
-let syncOff=0, aRef=null, wRef=0, seekGoal=null, seekAt=0, seekWarned=false;
+let syncOff=0, ovErr='', aRef=null, wRef=0, seekGoal=null, seekAt=0, seekWarned=false;
 
 /* ---------- audio graph ---------- */
 function ac(){
@@ -492,6 +493,44 @@ function computeFingering(){
     }
     flush();
   }
+  repairHeldFingers();
+}
+/* A finger can only be in one place at a time. Grouping by attack time alone let a
+   note that is still being HELD share a finger with a new note struck under it --
+   the hand then drew fewer fingers than there were keys down. Walk the notes in
+   order and, whenever a new note collides with something still sounding in the same
+   hand, move it to a free finger, preferring one that keeps finger order rising with
+   pitch (falling, for the left hand). */
+function repairHeldFingers(){
+  for(const hand of ['r','l']){
+    const hn=notes.filter(n=>n.h===hand&&visible(n)&&n.f).sort((a,b)=>a.t-b.t||a.p-b.p);
+    const dir = hand==='r' ? 1 : -1;
+    for(let i=0;i<hn.length;i++){
+      const n=hn[i];
+      const held=[];
+      for(let j=i-1;j>=0;j--){
+        const m=hn[j];
+        if(m.t+m.d<=n.t) { if(n.t-m.t>8) break; continue; }
+        held.push(m);
+      }
+      if(!held.length) continue;
+      const used=new Set(held.map(m=>m.f));
+      if(!used.has(n.f)) continue;                 // no collision, leave it alone
+      let best=null,bc=Infinity;
+      for(let f=1;f<=5;f++){
+        if(used.has(f)) continue;
+        let c=noteCost(f,n.p)*0.4;
+        for(const m of held){                      // finger order should track pitch
+          const dp=(n.p-m.p)*dir, df=f-m.f;
+          if(dp>0&&df<0) c+=1.6;
+          if(dp<0&&df>0) c+=1.6;
+          if(dp===0) c+=0.4;
+        }
+        if(c<bc){bc=c;best=f;}
+      }
+      if(best) n.f=best;                           // 5 already down: keep what we had
+    }
+  }
 }
 
 /* ---------- hand glyph ----------
@@ -522,7 +561,13 @@ function drawHand(hand,pts){
     const den=n*sff-sf*sf;
     m = den ? (n*sfx-sf*sx)/den : dflt;
     if(!isFinite(m)||Math.abs(m)<wKeyW*0.40||Math.sign(m)!==dir) m=dflt;
-    c=(sx-m*sf)/n;
+    /* Spacing was only clamped from below. Two fingers far apart -- 1 on D5 and 2 on
+       Bb5 is a sixth -- extrapolated 3, 4 and 5 clean off the end of the hand, so the
+       glyph reached up the keyboard and pointed its pinky at a key nothing was
+       playing. That reads as a missing highlight. Five fingers cover about an octave,
+       seven white keys, so per-finger spacing tops out near 1.75 of them. */
+    if(Math.abs(m)>wKeyW*1.75) m=wKeyW*1.75*dir;
+    c=(sx-m*sf)/n;                             // refit through the centre of what is down
   }
   const col  = hand==='r' ? '#4a9eff' : '#ff8c42';   // used only for the cuff + numbers
   const SKIN='#e5ab80', SKIN_UP='#c58f6a', EDGE='#8d5c3c';
@@ -684,7 +729,8 @@ function syncOverlay(force){
   ov.playbackRate=speed;
   if(force){ seekGoal=Math.max(0,t+D.downbeat+syncOff); ov.currentTime=seekGoal;
              seekAt=performance.now(); aRef=null; }
-  if(playing && ov.paused) ov.play().catch(()=>{});
+  if(playing && ov.paused) ov.play().catch(e=>{ ovErr=e.name+': '+e.message;
+    console.warn('play-along play() rejected —',ovErr); });
   if(!playing && !ov.paused) ov.pause();
 }
 
@@ -788,6 +834,15 @@ function render(){
   if(handsOn){ drawHand('l',handPts.l); drawHand('r',handPts.r); }
   drawChordHUD(); drawLyrics();
   $('pos').innerHTML=`bar <b>${Math.max(1,barOf(t))}</b> · ${fmt(t)} / ${fmt(D.duration)}`;
+  /* The play-along failure modes are all silent: play() rejects, the element sits at
+     readyState 1 with nothing decoded, or the volume is zero. None of them show up
+     on screen, so "no sound" was indistinguishable from "wrong file". Say it out. */
+  $('ovnote').textContent = !$('src').value ? ''
+    : ovErr ? ovErr
+    : !ov.getAttribute('src') ? 'no source loaded'
+    : ov.error ? 'decode error '+ov.error.code
+    : ov.paused ? 'paused · '+ov.readyState
+    : `${fmt(ov.currentTime)} · rs${ov.readyState} · vol ${Math.round(ov.volume*100)}%`;
   $('chordnow').textContent=chordAt(t);
   const s=$('seek'); if(document.activeElement!==s) s.value=Math.round(t/D.duration*1000);
 }
@@ -833,8 +888,13 @@ $('btnP').onclick=()=>{ ac().resume(); percOn=!percOn; lastTick=-1;
 $('pcvol').oninput=e=>{ if(percGain) percGain.gain.value=e.target.value/100; };
 $('pcstyle').onchange=()=>{ lastTick=-1; };
 $('ovol').oninput=e=>{ ov.volume=e.target.value/100; };
-$('src').onchange=e=>{
-  const o=e.target.selectedOptions[0];
+/* Chrome restores a <select>'s value across a reload but does NOT fire change, so
+   the dropdown came back reading "vocals only" while ov.src had never been set --
+   it looked selected and played nothing, and reloading could not clear it because
+   the reload was what caused it. Applying the current value on startup as well as
+   on change is what makes the control mean what it says. */
+function applySrc(){
+  const sel=$('src'), o=sel.selectedOptions[0];
   pianoDuck = o && o.dataset.keys ? 0.25 : 1;
   $('duck').textContent = pianoDuck<1 ? 'ducked 25%' : '';
   setPianoGain();
@@ -845,15 +905,21 @@ $('src').onchange=e=>{
   if(o && o.dataset.drums && percOn){ percOn=false; $('btnP').classList.remove('on');
     $('btnP').textContent='Off'; $('pcnote').textContent='off — track has drums'; }
   else if(!(o && o.dataset.drums)) $('pcnote').textContent='';
-  if(!e.target.value){ ov.pause(); ov.removeAttribute('src'); return; }
-  ov.src=e.target.value; ov.volume=$('ovol').value/100; ov.load();
+  if(!sel.value){ ov.pause(); ov.removeAttribute('src'); return; }
+  if(ov.getAttribute('src')===sel.value && ov.readyState>=2){ syncOverlay(true); return; }
+  ov.src=sel.value; ov.volume=$('ovol').value/100; ov.load();
   /* loadedmetadata fires at readyState 1, but ovLive() wants 2, so syncOverlay
      bailed and the new source sat there until you paused and played again.
-     canplay is the first event that clears the bar. Both are wired; calling
-     syncOverlay twice is harmless. */
-  ov.onloadedmetadata=()=>syncOverlay(true);
-  ov.oncanplay=()=>syncOverlay(true);
-};
+     canplay is the first event that clears the bar.
+     These MUST be one-shot. syncOverlay(true) sets currentTime, seeking drops
+     readyState, refilling fires canplay again -- and it seeks once more. Left
+     armed, that ran 55k seeks in six seconds: the clock advanced, the element
+     reported playing, and not one sample ever reached the speakers. Disarming
+     both on the first fire is the whole fix. */
+  ov.onloadedmetadata=()=>{ ov.onloadedmetadata=null; syncOverlay(true); };
+  ov.oncanplay=()=>{ ov.oncanplay=null; ov.onloadedmetadata=null; syncOverlay(true); };
+}
+$('src').onchange=applySrc;
 $('lick').onclick=()=>{ $('loopA').value=43; $('loopB').value=49; $('loopOn').checked=true;
   t=timeOfBar(43); sched.clear(); lastTick=-1; if(!playing) setPlaying(true); else syncOverlay(true); };
 $('gear').onclick=()=>{ const m=$('more');
@@ -876,6 +942,7 @@ fetch('notes.json').then(r=>r.json()).then(d=>{
   $('loopA').max=d.nbars; $('loopB').max=d.nbars;
   resize(); buildLHGroups(); applyLH(); applyReach(); computeFingering();
   $('simpv').textContent='all '+notes.length;
+  applySrc();                       // honour a value the browser restored for us
   loadPiano().then(()=>{ $('boot').style.display='none'; requestAnimationFrame(frame); })
              .catch(()=>{ $('boot').style.display='none'; requestAnimationFrame(frame); });
 });
