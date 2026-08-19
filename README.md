@@ -146,6 +146,12 @@ There are two different pianos here and the labels have to keep them apart:
 Six mixes built from three parts you can name. Drums go in the two you play along to and stay
 out of the ones you study with.
 
+**Every mix is levelled to the same loudness**, −20 dB mean with a limiter on the peaks. Without
+that the isolated vocal sits 8.6 dB under the full song, so one slider position that suits the
+full song makes "vocals only" sound like nothing is playing at all — which is exactly how it was
+reported. Two of the mixes already touch full scale and cannot simply be turned up, hence the
+limiter. The spread across the six is now 2 dB instead of 11.
+
 Two things step aside on their own rather than competing with the recording. A mix containing
 the original keyboard **ducks the app piano to 25%** — otherwise two pianos play nearly the same
 part a few milliseconds apart and flam, which reads as a broken transcription when it is only
