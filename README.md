@@ -124,20 +124,24 @@ open http://127.0.0.1:8899/
 Audio is gitignored. Copy `song.mp3` (full mix) and `keys.mp3` (the Keyboard stem) into
 `player/`, then build the rest with `./scripts/build_playalong.sh`:
 
-There are two different pianos here and the labels have to keep them apart. The **source
-keyboard** is Suno's generated audio. The **app piano** is Salamander samples playing
-`notes.json`, our reading of that audio — quantised to sixteenths, reach-clamped, thinned. They
-are close but not the same performance, so anything named "source" is the recording.
+There are two different pianos here and the labels have to keep them apart:
+
+- **app piano** — Salamander samples playing `notes.json`, our reading of the recording,
+  quantised to sixteenths, reach-clamped and thinned. Its volume is the App piano group.
+- **original keyboard stem** — Suno's generated audio, straight off the record.
+
+Close, but not the same performance, so every play-along entry that contains the recording says
+"keyboard stem".
 
 | Play along | what it is | use it to |
 |---|---|---|
-| mix − piano | everything but the Keyboard stem | be the pianist |
-| mix − piano − vocals | drums, bass, percussion, synth | play and sing |
-| bass alone | the Bass stem | solo the line your left hand covers |
-| vocals alone | lead + backing | hear the melody over your comping |
-| source keyboard alone | the Keyboard stem | copy the licks |
-| source keyboard + drums | keyboard, drums, percussion | put the licks in time |
-| source keyboard + vocals | keyboard and both vocal stems | melody against the part |
+| band only, no piano | everything but the Keyboard stem | be the pianist |
+| band only, no piano or vocals | drums, bass, percussion, synth | play and sing |
+| bass only | the Bass stem | solo the line your left hand covers |
+| vocals only | lead + backing | hear the melody over your comping |
+| keyboard stem only | the Keyboard stem | copy the licks |
+| keyboard stem + drums | keyboard, drums, percussion | put the licks in time |
+| keyboard stem + vocals | keyboard and both vocal stems | melody against the part |
 | full song | the master | check yourself against the record |
 
 The app's piano keeps sounding under the play-along, so the four sources that contain the

@@ -135,7 +135,7 @@
       </div>
     </div>
 
-    <div class="group"><span class="cap">Piano</span>
+    <div class="group"><span class="cap" title="the sampled piano this app plays from notes.json — not the keyboard on the recording">App piano</span>
       <div class="items">
         <span class="cap">Vol</span><input id="pvol" type="range" min="0" max="100" value="85">
         <span class="val wide" id="duck"></span>
@@ -167,15 +167,15 @@
         <select id="src">
           <option value="">off</option>
           <optgroup label="you play the piano">
-            <option value="band-minus-piano.mp3">mix − piano  (band + vocals)</option>
-            <option value="bed.mp3">mix − piano − vocals  (you sing too)</option>
-            <option value="bass.mp3">bass alone  (your left hand)</option>
-            <option value="vocals.mp3">vocals alone</option>
+            <option value="band-minus-piano.mp3">band only, no piano</option>
+            <option value="bed.mp3">band only, no piano or vocals</option>
+            <option value="bass.mp3">bass only</option>
+            <option value="vocals.mp3">vocals only</option>
           </optgroup>
-          <optgroup label="the original recording — has piano in it">
-            <option value="keys.mp3" data-keys="1">source keyboard alone</option>
-            <option value="keys-drums.mp3" data-keys="1">source keyboard + drums</option>
-            <option value="vocals-keys.mp3" data-keys="1">source keyboard + vocals</option>
+          <optgroup label="original keyboard stem — ducks the app piano">
+            <option value="keys.mp3" data-keys="1">keyboard stem only</option>
+            <option value="keys-drums.mp3" data-keys="1">keyboard stem + drums</option>
+            <option value="vocals-keys.mp3" data-keys="1">keyboard stem + vocals</option>
             <option value="song.mp3" data-keys="1">full song</option>
           </optgroup>
         </select>
@@ -772,7 +772,7 @@ $('soff').oninput=e=>{ syncOff=+e.target.value/1000;
 $('src').onchange=e=>{
   const o=e.target.selectedOptions[0];
   pianoDuck = o && o.dataset.keys ? 0.25 : 1;
-  $('duck').textContent = pianoDuck<1 ? 'ducked' : '';
+  $('duck').textContent = pianoDuck<1 ? 'ducked 25%' : '';
   setPianoGain();
   if(!e.target.value){ ov.pause(); ov.removeAttribute('src'); return; }
   ov.src=e.target.value; ov.volume=$('ovol').value/100; ov.load();
