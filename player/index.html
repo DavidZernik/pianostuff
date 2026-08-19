@@ -124,6 +124,13 @@
       </div>
     </div>
 
+    <div class="group"><span class="cap">Display</span>
+      <div class="items">
+        <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text)">
+          <input id="chordHUD" type="checkbox" checked> Big chord name</label>
+      </div>
+    </div>
+
     <div class="group"><span class="cap">Percussion</span>
       <div class="items">
         <button id="btnP" class="pc">Off</button>
@@ -295,6 +302,34 @@ const visible = n => n.v>=simp &&
 const barOf = s => Math.floor((s-D.downbeat)/D.bar)+1;
 const timeOfBar = b => D.downbeat+(b-1)*D.bar;
 function chordAt(s){ let c='—'; for(const k of D.chords){ if(k.t<=s+0.02) c=k.name; else break; } return c; }
+function chordNext(s){
+  const cur=chordAt(s);
+  for(const k of D.chords){ if(k.t>s+0.02 && k.name!==cur) return k; }
+  return null;
+}
+function drawChordHUD(){
+  if(!$('chordHUD').checked) return;
+  const cur=chordAt(t), nx=chordNext(t);
+  ctx.save();
+  ctx.textAlign='center';
+  // current chord — large, centred, with a soft plate so it reads over the notes
+  ctx.font='700 54px -apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif';
+  const w=Math.max(ctx.measureText(cur).width+56,190);
+  ctx.fillStyle='rgba(15,17,22,0.74)';
+  roundRect(W/2-w/2, 16, w, 74, 14); ctx.fill();
+  ctx.strokeStyle='rgba(74,158,255,0.30)'; ctx.lineWidth=1;
+  roundRect(W/2-w/2, 16, w, 74, 14); ctx.stroke();
+  ctx.fillStyle='#eef2f8';
+  ctx.fillText(cur, W/2, 70);
+  // what's coming, and how far away
+  if(nx){
+    const bars=Math.max(0,Math.round((nx.t-t)/D.bar*10)/10);
+    ctx.font='600 15px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+    ctx.fillStyle='#6f7789';
+    ctx.fillText(`next  ${nx.name}   ·   ${bars<0.1?'now':bars.toFixed(1)+' bars'}`, W/2, 110);
+  }
+  ctx.restore();
+}
 const fmt = s => `${Math.floor(Math.max(s,0)/60)}:${String(Math.floor(Math.max(s,0)%60)).padStart(2,'0')}`;
 const ovLive = () => !!$('src').value && ov.readyState>=2;
 function syncOverlay(force){
@@ -371,6 +406,7 @@ function render(){
     const k=keyRect(p), a=active.get(p);
     ctx.fillStyle=a?(a==='r'?'#2f7fd6':'#d66d24'):'#141821';
     ctx.fillRect(k.x,KEYTOP,k.w,KEYH*0.62); }
+  drawChordHUD();
   $('pos').innerHTML=`bar <b>${Math.max(1,barOf(t))}</b> · ${fmt(t)} / ${fmt(D.duration)}`;
   $('chordnow').textContent=chordAt(t);
   const s=$('seek'); if(document.activeElement!==s) s.value=Math.round(t/D.duration*1000);
