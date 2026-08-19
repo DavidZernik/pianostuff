@@ -16,8 +16,12 @@
        display:flex;flex-direction:column;
        font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",Segoe UI,sans-serif;
        -webkit-font-smoothing:antialiased}
-  #stage{flex:1 1 auto;min-height:0;position:relative}
+  /* the piano only has 68 keys; past ~1400px it just gets thinner and further
+     from your eye, and the setup panel spreads into a single unreadable row */
+  #stage{flex:1 1 auto;min-height:0;position:relative;
+         width:100%;max-width:1400px;margin:0 auto}
   canvas{display:block;width:100%;height:100%}
+  #transport,#practice,#more{max-width:1400px;margin-left:auto;margin-right:auto}
 
   #bar{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line)}
 
@@ -184,6 +188,10 @@ let D=null, LO=29, HI=96, notes=[], W=0,H=0,dpr=1;
 let t=0, playing=false, speed=1, simp=0, showR=true, showL=true, last=0;
 let fingOn=true, handsOn=true;
 const PPS=190;
+/* How long a key stays lit. The notated duration alone is too short to follow: a
+   sixteenth at this tempo is 148ms, so a run of them strobes. This is roughly what
+   you still hear of the note, and roughly how long a finger really sits there. */
+const LIT=0.30, litFor = n => Math.max(n.d+0.18, LIT);
 let audio=null, sched=new Set(), pianoGain=null, percGain=null, BUF={}, BASES=[];
 let NOISE=null, percOn=false, lastTick=-1;
 let syncOff=0, aRef=null, wRef=0;
@@ -663,7 +671,7 @@ function render(){
   for(const n of notes){
     if(n.t>t+look) break;
     if(n.t+n.d<t-0.15||!visible(n)) continue;
-    const k=keyRect(n.p), yEnd=KEYTOP-(n.t-t)*PPS, h=Math.max(4,n.d*PPS), y=yEnd-h;
+    const k=keyRect(n.p), yEnd=KEYTOP-(n.t-t)*PPS, h=Math.max(11,n.d*PPS), y=yEnd-h;
     if(yEnd<0) continue;
     const on = n.t<=t && t<n.t+n.d;
     ctx.fillStyle = n.h==='r' ? (on?'#8fc4ff':'#4a9eff') : (on?'#ffb27a':'#ff8c42');
@@ -678,7 +686,7 @@ function render(){
   }
   const active=new Map(), handPts={r:[],l:[]};
   for(const n of notes){ if(n.t>t) break;
-    if(t<n.t+n.d&&visible(n)){ active.set(n.p,n.h);
+    if(t<n.t+litFor(n)&&visible(n)){ active.set(n.p,n.h);
       if(n.f){ const k=keyRect(n.p); handPts[n.h].push({f:n.f,x:k.x+k.w/2}); } } }
   ctx.fillStyle='#080a0e'; ctx.fillRect(0,KEYTOP-3,W,3);
   for(let p=LO;p<=HI;p++){ if(isBlack(p)) continue;
