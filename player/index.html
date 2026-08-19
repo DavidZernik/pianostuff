@@ -180,8 +180,6 @@
           </optgroup>
         </select>
         <span class="cap">Vol</span><input id="ovol" type="range" min="0" max="100" value="55">
-        <span class="cap">Sync</span><input id="soff" type="range" min="-200" max="200" value="0">
-        <span class="val" id="soffv">0ms</span>
       </div>
     </div>
   </div>
@@ -204,6 +202,9 @@ const PPS=190;
 const LIT=0.30, litFor = n => Math.max(n.d+0.18, LIT);
 let audio=null, sched=new Set(), pianoGain=null, percGain=null, BUF={}, BASES=[];
 let NOISE=null, percOn=false, lastTick=-1;
+/* Output latency compensation. No control on it: on wired or built-in output the
+   delay is a few milliseconds and invisible. Bluetooth runs 100-300ms and would
+   need this — put a slider back on it if that ever comes up. */
 let syncOff=0, aRef=null, wRef=0;
 
 /* ---------- audio graph ---------- */
@@ -767,8 +768,6 @@ $('btnP').onclick=()=>{ ac().resume(); percOn=!percOn; lastTick=-1;
 $('pcvol').oninput=e=>{ if(percGain) percGain.gain.value=e.target.value/100; };
 $('pcstyle').onchange=()=>{ lastTick=-1; };
 $('ovol').oninput=e=>{ ov.volume=e.target.value/100; };
-$('soff').oninput=e=>{ syncOff=+e.target.value/1000;
-  $('soffv').textContent=e.target.value+'ms'; aRef=null; syncOverlay(true); };
 $('src').onchange=e=>{
   const o=e.target.selectedOptions[0];
   pianoDuck = o && o.dataset.keys ? 0.25 : 1;
