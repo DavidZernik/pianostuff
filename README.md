@@ -125,126 +125,41 @@ cannot seek inside a media file: `audio.currentTime = x` silently fails and the 
 back to 0. The player follows the audio clock, so that dragged the display with it and clicking
 anywhere on the timeline restarted the song. `scripts/serve.py` answers ranges with 206.
 
-Audio is gitignored. Copy `song.mp3` (full mix) and `keys.mp3` (the Keyboard stem) into
-`player/`, then build the rest with `./scripts/build_playalong.sh`:
+Audio is gitignored. Copy `song.mp3` (the full mix) into `player/`, then build the rest with
+`./scripts/build_playalong.sh`.
 
 There are two different pianos here and the labels have to keep them apart:
 
 - **app piano** — Salamander samples playing `notes.json`, our reading of the recording,
   quantised to sixteenths, reach-clamped and thinned. Its volume is the App piano group.
-- **original keyboard stem** — Suno's generated audio, straight off the record.
+- **keyboard** — Suno's generated audio, straight off the record.
 
-Close, but not the same performance, so every play-along entry that contains the recording says
-"keyboard stem".
+| Play along | use it to |
+|---|---|
+| vocals only | hear the melody over your comping |
+| bass only | solo the line your left hand covers |
+| bass + drums | play piano and sing |
+| vocals + bass + drums | play piano |
+| keyboard + bass + vocals | study the part |
+| full song | check yourself against the record |
 
-| Play along | what it is | use it to |
-|---|---|---|
-| band only, no piano | everything but the Keyboard stem | be the pianist |
-| band only, no piano or vocals | drums, bass, percussion, synth | play and sing |
-| bass only | the Bass stem | solo the line your left hand covers |
-| vocals only | lead + backing | hear the melody over your comping |
-| keyboard stem only | the Keyboard stem | copy the licks |
-| keyboard stem + drums | keyboard, drums, percussion | put the licks in time |
-| keyboard stem + vocals | keyboard and both vocal stems | melody against the part |
-| full song | the master | check yourself against the record |
+Six mixes built from three parts you can name. Drums go in the two you play along to and stay
+out of the ones you study with.
 
-The app's piano keeps sounding under the play-along, so the four sources that contain the
-original keyboard duck it to 25%. Otherwise two pianos play nearly the same part a few
-milliseconds apart and flam, which reads as a broken transcription when it is only doubling.
-Ducked rather than muted on purpose: at 25% you can still hear where the two genuinely
-disagree, which is a decent way to spot a wrong note.
+Two things step aside on their own rather than competing with the recording. A mix containing
+the original keyboard **ducks the app piano to 25%** — otherwise two pianos play nearly the same
+part a few milliseconds apart and flam, which reads as a broken transcription when it is only
+doubling. Ducked rather than muted on purpose: at 25% you can still hear where the two genuinely
+disagree. And a mix containing drums **switches the generated percussion off**, since two grooves
+that do not quite agree on the feel is worse than either alone.
+
+The percussion stays in the app for slow and looped practice, where a stretched MP3 goes muddy
+and a click built from the beat grid does not.
 
 Deliberately a list of mixes rather than per-stem toggles. Toggles would mean several `<audio>`
 elements each running its own clock, and they separate by tens of milliseconds over four
 minutes — audible as flamming, worst on the drums. Fixing that means reopening the single-clock
-sync, which is the thing that made the overlay line up in the first place. Not worth it to save
-a click until the list here proves too small.
-
-**Controls:** speed down to 10%, bar-range looping, independent RH/LH toggles, a left-hand
-density mode, a reach clamp, and a "hide faint" slider. Space plays, arrows jump a bar.
-Piano sound is the Salamander Grand sampled every three semitones, so what you see and what
-you hear are always the same data.
-
-### Timed lyrics
-
-`align_lyrics.py` runs Whisper on the isolated lead vocal and transfers its word timings onto
-the real lyrics, matched by sequence. Whisper's own reading is discarded — it mishears a song
-containing "Kha boo ruh" and "dahf ha shah voo ah", but it does not need to get the words right,
-only when they happen. 200 of 354 words anchor directly (56%, in 22 runs); the rest are spaced
-between their neighbours at the song's median word gap.
-
-Only runs of two or more consecutive words are trusted as anchors. A lone "the" matching by
-chance somewhere else in the song drags every word after it, and one bad anchor does more damage
-than a hundred interpolated ones.
-
-**The vocal stem makes sound from 4.6s, but the first lyric is at 29.4s.** Those 23 seconds are a
-wordless hum: Whisper renders all of it as four "hmm"s, the syllable rate is half that of the
-sung sections, and the first verse lands on bar 13 — exactly where the bass enters. An early
-version stretched verse one back to 4.6s to fill that gap, which was wrong.
-
-Two independent checks that the alignment holds:
-
-- the second instrumental (bars 86–89) contains **no** lyric lines, and the first (43–49) contains
-  one, at bar 48, where verse two starts — a discrepancy of a bar or two at a section boundary
-- the sections land where the arrangement says they should: verse 1 at 13–34, chorus 35–42,
-  verse 2 48–66, bridge 75–83, final chorus 95–106, outro 107–110, in a song of 118 bars
-
-### The bass line
-
-There is no bassist. Playing this alone, the left hand has to cover the bass, and the
-transcribed left hand does not: it is only the Keyboard stem below middle C, and its lowest
-note is the chord root barely half the time. The Bass stem is a separate instrument, louder
-than the Keyboard (−24.3 dB against −28.5), sitting at F1 to C2. `extract_bass.py` transcribes
-it and `merge_bass.py` folds it into the left hand, tagged so the player can switch it off.
-
-**There is no brass.** The Brass stem is digital silence — peak −55 dB, RMS −108 dB, identical
-to the empty "Other" stem. Suno emitted the slot and put nothing in it. The bass-register part
-you can hear is the Bass stem; the horn-like line above it is Synth, centred around F3–B♭3.
-
-**The bass does not enter until bar 13.** Bars 1–12 measure −80 dB or below in that stem. The
-silence is real, not a detection failure.
-
-pyin was tried first and abandoned. Its `voiced_prob` runs so low on a synth bass that only 11%
-of frames clear 0.5, and the notes it returned disagreed with the recording — they matched the
-chord root 25% of the time at the bar line, where reading the same stem's spectrum directly
-gets 66%. So the extractor takes the strongest CQT bin per sixteenth, then checks an octave
-below, because a synth bass has a second harmonic loud enough to notate the whole line an
-octave high.
-
-The result is 232 notes, F1–C3, median B♭1, **54% of its duration on the chord root and 64% on
-root or fifth**, with chromatic approach notes into the B♭ bars — a bass line, not a pitch trace.
-
-**A note starts where there is an attack.** Two earlier versions got this wrong and both were
-caught by eye in the player before any measurement was taken.
-
-The first walked sixteenth-slots and stamped each note at its slot boundary. That is a floor,
-not a round, so a note starting three quarters of the way through its slot was dragged a whole
-sixteenth early — and only ever in that direction. Against each stem's own attacks it measured
-**155ms out while the keyboard sat at 8ms**; a sixteenth is 148ms.
-
-The second rounded correctly but still emitted a note for every slot whose energy cleared a
-floor, which chops a held note into a chain of re-strikes on sixteenths where nothing happens.
-Of the 302 such notes that landed without a right-hand note beside them, only 15% sat on a real
-attack, at a median attack strength of −0.05 — below the average of the whole track.
-
-The extractor now detects attacks first, reads the pitch at each one, and lets a note sustain to
-the next attack. `delta` is 0.04, chosen by sweep: everything from 0.15 to 0.02 holds the same
-musical validity, but 0.03–0.04 puts the notes on the strongest attacks. The usual 0.3 finds
-only 59 attacks in the entire song, because a bass attack is soft.
-
-| | before | after |
-|---|---|---|
-| onset alignment | +155ms, then +10ms at score 0.86 | **+10ms at score 3.11** (keyboard: 2.24) |
-| notes with no right-hand note beside them | 15% on a real attack | **68%** |
-| shares a sixteenth with the right hand | 35% | **52%** |
-| duration on the chord root | 47% | **54%** |
-
-Run that comparison whenever a part arrives from a new pipeline.
-
-Once the bass is in, the left hand is doing two jobs at once, so it gets its own clamp rule:
-the bass note is kept whatever happens, and a shell is allowed above it out to a twelfth. You
-strike them in turn and hold with the pedal, so the gap is not a reach — but past a twelfth
-it is a different register rather than a voicing.
+sync, which is the thing that made the overlay line up in the first place.
 
 ### Reach clamp
 

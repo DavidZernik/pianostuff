@@ -29,10 +29,13 @@ mix() {  # mix <out> <stem>...
   printf "  %-22s %6.1f s\n" "$out" "$(ffprobe -v error -show_entries format=duration -of csv=p=0 "player/$out")"
 }
 
+# Six mixes, built from three parts you can name: vocals, bass, keyboard. Drums go
+# in the two you play along to and stay out of the ones you study with.
 mix vocals.mp3            "0 Lead Vocals" "1 Backing Vocals"
-mix bed.mp3               "2 Drums" "3 Bass" "5 Percussion" "6 Synth"
-mix band-minus-piano.mp3  "0 Lead Vocals" "1 Backing Vocals" "2 Drums" "3 Bass" "5 Percussion" "6 Synth"
 mix bass.mp3              "3 Bass"
-mix keys-drums.mp3        "4 Keyboard" "2 Drums" "5 Percussion"
-mix vocals-keys.mp3       "0 Lead Vocals" "1 Backing Vocals" "4 Keyboard"
-echo "  song.mp3 and keys.mp3 come straight from the source mp3 and the Keyboard stem"
+mix bass-drums.mp3        "3 Bass" "2 Drums" "5 Percussion"
+mix vocals-bass-drums.mp3 "0 Lead Vocals" "1 Backing Vocals" "3 Bass" "2 Drums" "5 Percussion"
+mix keys-bass-vocals.mp3  "4 Keyboard" "3 Bass" "0 Lead Vocals" "1 Backing Vocals"
+echo "  song.mp3 comes straight from the source mp3"
+rm -f player/bed.mp3 player/band-minus-piano.mp3 player/keys-drums.mp3 player/vocals-keys.mp3 player/keys.mp3
+echo "  removed the old mixes"
