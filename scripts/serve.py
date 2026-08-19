@@ -61,8 +61,16 @@ class RangeHandler(SimpleHTTPRequestHandler):
         return _Slice(f, end - start + 1)
 
     def end_headers(self):
-        if 'Accept-Ranges' not in self._headers_buffer_names():
+        buf = self._headers_buffer_names()
+        if 'Accept-Ranges' not in buf:
             self.send_header('Accept-Ranges', 'bytes')
+        # Rebuilding the mixes changes the file but not the URL, so a browser that
+        # cached the old one keeps playing it. That is how "vocals only" came back
+        # silent after build_playalong.sh had already fixed the levels. no-cache
+        # still lets the browser reuse the bytes, it just has to revalidate first,
+        # so a rebuilt file is picked up and an unchanged one costs a 304.
+        if 'Cache-Control' not in buf:
+            self.send_header('Cache-Control', 'no-cache')
         super().end_headers()
 
     def _headers_buffer_names(self):
