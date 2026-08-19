@@ -16,12 +16,12 @@
        display:flex;flex-direction:column;
        font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",Segoe UI,sans-serif;
        -webkit-font-smoothing:antialiased}
-  /* the piano only has 68 keys; past ~1400px it just gets thinner and further
+  /* the piano only has 68 keys; past ~1150px it just gets thinner and further
      from your eye, and the setup panel spreads into a single unreadable row */
   #stage{flex:1 1 auto;min-height:0;position:relative;
-         width:100%;max-width:1400px;margin:0 auto}
+         width:100%;max-width:1150px;margin:0 auto}
   canvas{display:block;width:100%;height:100%}
-  #transport,#practice,#more{max-width:1400px;margin-left:auto;margin-right:auto}
+  #transport,#practice,#more{max-width:1150px;margin-left:auto;margin-right:auto}
 
   #bar{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line)}
 
@@ -106,10 +106,10 @@
       <span style="color:var(--faint)">–</span>
       <input id="loopB" type="number" value="49" min="1">
       <button id="lick">Licks</button></div>
-    <button id="gear">⚙ Setup</button>
+    <button id="gear" class="open">⚙ Setup</button>
   </div>
 
-  <div id="more">
+  <div id="more" class="open">
     <div class="group"><span class="cap">Left hand</span>
       <div class="items">
         <select id="lhmode">
