@@ -138,6 +138,7 @@
     <div class="group"><span class="cap">Piano</span>
       <div class="items">
         <span class="cap">Vol</span><input id="pvol" type="range" min="0" max="100" value="85">
+        <span class="val wide" id="duck"></span>
       </div>
     </div>
 
@@ -168,15 +169,15 @@
           <optgroup label="you play the piano">
             <option value="band-minus-piano.mp3">mix − piano  (band + vocals)</option>
             <option value="bed.mp3">mix − piano − vocals  (you sing too)</option>
-          </optgroup>
-          <optgroup label="learn the part">
-            <option value="keys.mp3">piano alone</option>
-            <option value="keys-drums.mp3">piano + drums</option>
             <option value="bass.mp3">bass alone  (your left hand)</option>
-            <option value="vocals-keys.mp3">piano + vocals</option>
             <option value="vocals.mp3">vocals alone</option>
           </optgroup>
-          <option value="song.mp3">full song</option>
+          <optgroup label="the original recording — has piano in it">
+            <option value="keys.mp3" data-keys="1">source keyboard alone</option>
+            <option value="keys-drums.mp3" data-keys="1">source keyboard + drums</option>
+            <option value="vocals-keys.mp3" data-keys="1">source keyboard + vocals</option>
+            <option value="song.mp3" data-keys="1">full song</option>
+          </optgroup>
         </select>
         <span class="cap">Vol</span><input id="ovol" type="range" min="0" max="100" value="55">
         <span class="cap">Sync</span><input id="soff" type="range" min="-200" max="200" value="0">
@@ -209,7 +210,8 @@ let syncOff=0, aRef=null, wRef=0;
 function ac(){
   if(!audio){
     audio=new (window.AudioContext||window.webkitAudioContext)();
-    pianoGain=audio.createGain(); pianoGain.gain.value=0.85; pianoGain.connect(audio.destination);
+    pianoGain=audio.createGain(); pianoGain.connect(audio.destination);
+    setPianoGain();          // the source may already be ducking us, chosen before Play
     percGain =audio.createGain(); percGain.gain.value=0.45;  percGain.connect(audio.destination);
   }
   return audio;
@@ -751,7 +753,15 @@ $('simp').oninput=e=>{ simp=+e.target.value;
   const k=notes.filter(n=>str(n)>=simp).length;
   $('simpv').textContent = simp<=0 ? 'all '+notes.length : k+' of '+notes.length;
   clearTimeout(simpT); simpT=setTimeout(computeFingering,120); };
-$('pvol').oninput=e=>{ if(pianoGain) pianoGain.gain.value=e.target.value/100; };
+/* The app's piano and the play-along both sound at once. Pick a source that has
+   the original keyboard in it and you get two pianos playing nearly — but not
+   quite — the same part: ours is quantised to sixteenths and clamped, the
+   recording is not. That flams, and it reads as a bad transcription when it is
+   really just doubling. So duck ours instead of silencing it: quiet enough to
+   follow the record, loud enough that a genuine disagreement still shows up. */
+let pianoDuck=1;
+function setPianoGain(){ if(pianoGain) pianoGain.gain.value=($('pvol').value/100)*pianoDuck; }
+$('pvol').oninput=setPianoGain;
 $('btnP').onclick=()=>{ ac().resume(); percOn=!percOn; lastTick=-1;
   $('btnP').classList.toggle('on',percOn); $('btnP').textContent=percOn?'On':'Off'; };
 $('pcvol').oninput=e=>{ if(percGain) percGain.gain.value=e.target.value/100; };
@@ -760,6 +770,10 @@ $('ovol').oninput=e=>{ ov.volume=e.target.value/100; };
 $('soff').oninput=e=>{ syncOff=+e.target.value/1000;
   $('soffv').textContent=e.target.value+'ms'; aRef=null; syncOverlay(true); };
 $('src').onchange=e=>{
+  const o=e.target.selectedOptions[0];
+  pianoDuck = o && o.dataset.keys ? 0.25 : 1;
+  $('duck').textContent = pianoDuck<1 ? 'ducked' : '';
+  setPianoGain();
   if(!e.target.value){ ov.pause(); ov.removeAttribute('src'); return; }
   ov.src=e.target.value; ov.volume=$('ovol').value/100; ov.load();
   ov.onloadedmetadata=()=>syncOverlay(true);

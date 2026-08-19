@@ -124,16 +124,27 @@ open http://127.0.0.1:8899/
 Audio is gitignored. Copy `song.mp3` (full mix) and `keys.mp3` (the Keyboard stem) into
 `player/`, then build the rest with `./scripts/build_playalong.sh`:
 
+There are two different pianos here and the labels have to keep them apart. The **source
+keyboard** is Suno's generated audio. The **app piano** is Salamander samples playing
+`notes.json`, our reading of that audio — quantised to sixteenths, reach-clamped, thinned. They
+are close but not the same performance, so anything named "source" is the recording.
+
 | Play along | what it is | use it to |
 |---|---|---|
 | mix − piano | everything but the Keyboard stem | be the pianist |
 | mix − piano − vocals | drums, bass, percussion, synth | play and sing |
-| piano alone | the Keyboard stem | copy the licks |
-| piano + drums | keyboard, drums, percussion | put the licks in time |
 | bass alone | the Bass stem | solo the line your left hand covers |
-| piano + vocals | keyboard and both vocal stems | melody against the part |
 | vocals alone | lead + backing | hear the melody over your comping |
+| source keyboard alone | the Keyboard stem | copy the licks |
+| source keyboard + drums | keyboard, drums, percussion | put the licks in time |
+| source keyboard + vocals | keyboard and both vocal stems | melody against the part |
 | full song | the master | check yourself against the record |
+
+The app's piano keeps sounding under the play-along, so the four sources that contain the
+original keyboard duck it to 25%. Otherwise two pianos play nearly the same part a few
+milliseconds apart and flam, which reads as a broken transcription when it is only doubling.
+Ducked rather than muted on purpose: at 25% you can still hear where the two genuinely
+disagree, which is a decent way to spot a wrong note.
 
 Deliberately a list of mixes rather than per-stem toggles. Toggles would mean several `<audio>`
 elements each running its own clock, and they separate by tens of milliseconds over four
