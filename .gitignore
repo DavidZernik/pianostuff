@@ -27,3 +27,6 @@ __pycache__/
 .vscode/
 .idea/
 *.swp
+
+# Downloaded piano samples (fetch with scripts/fetch_piano_samples.sh)
+player/piano/

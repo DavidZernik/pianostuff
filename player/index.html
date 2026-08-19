@@ -160,7 +160,29 @@ function tickPerc(){
   hit('shaker', !off && beatInBar===0);
   if(style==='full' && !off && (beatInBar===1||beatInBar===3)) hit('stick',false);
 }
-function buildPiano(){
+/* ---------- real recorded piano ----------
+   Salamander Grand Piano (Yamaha C5) by Alexander Holm, CC-BY 3.0.
+   Sampled every 3 semitones; we pitch-shift at most ±1 semitone to fill gaps,
+   which is small enough that the recording keeps its character. */
+const SAMPLES={C1:24,Ds1:27,Fs1:30,A1:33,C2:36,Ds2:39,Fs2:42,A2:45,C3:48,Ds3:51,
+               Fs3:54,A3:57,C4:60,Ds4:63,Fs4:66,A4:69,C5:72,Ds5:75,Fs5:78,A5:81,
+               C6:84,Ds6:87,Fs6:90,A6:93,C7:96};
+async function loadPiano(){
+  const a=ac(), names=Object.keys(SAMPLES);
+  let done=0;
+  await Promise.all(names.map(async n=>{
+    try{
+      const r=await fetch('piano/'+n+'.mp3');
+      if(!r.ok) throw 0;
+      BUF[SAMPLES[n]]=await a.decodeAudioData(await r.arrayBuffer());
+    }catch(e){ /* missing sample: neighbours cover it */ }
+    done++;
+    $('boot').textContent=`loading piano… ${done}/${names.length}`;
+  }));
+  BASES=Object.values(SAMPLES).filter(m=>BUF[m]).sort((x,y)=>x-y);
+  return BASES.length;
+}
+function buildPianoFallback(){
   const a=ac(), sr=a.sampleRate;
   BASES=[24,36,48,60,72,84,96];
   for(const base of BASES){
@@ -211,22 +233,20 @@ function playNote(midi,dur,vel,hand){
   const src=a.createBufferSource(); src.buffer=buf;
   src.playbackRate.value=Math.pow(2,(midi-base)/12);
   const v=Math.max(0,Math.min(1,vel/127));
-  // softer strike => darker tone, not merely quieter. This is most of the realism.
+  // The samples are recorded at one strike strength, so shape dynamics ourselves:
+  // softer notes are darker, not merely quieter.
   const lp=a.createBiquadFilter();
   lp.type='lowpass';
-  lp.frequency.value=Math.min(15000, 700+9000*Math.pow(v,1.45));
-  lp.Q.value=0.5;
-  // gentle body resonance so it isn't a bare string
-  const body=a.createBiquadFilter();
-  body.type='peaking'; body.frequency.value=190; body.Q.value=0.8; body.gain.value=3.5;
+  lp.frequency.value=Math.min(18000, 1400+15000*Math.pow(v,1.25));
+  lp.Q.value=0.4;
   const g=a.createGain();
-  const amp=(0.22+0.78*Math.pow(v,1.15))*(hand==='l'?0.82:1)*0.5;
-  const now=a.currentTime, hold=Math.max(0.10,Math.min(dur/speed,3.5));
+  const amp=(0.20+0.80*Math.pow(v,1.2))*(hand==='l'?0.86:1)*0.85;
+  const now=a.currentTime, hold=Math.max(0.10,Math.min(dur/speed,4.0));
   g.gain.setValueAtTime(amp,now);
   g.gain.setValueAtTime(amp,now+hold);
-  g.gain.exponentialRampToValueAtTime(0.0006,now+hold+0.28);    // felt damper, not a hard cut
-  src.connect(lp); lp.connect(body); body.connect(g); g.connect(pianoGain);
-  src.start(now); src.stop(now+hold+0.36);
+  g.gain.exponentialRampToValueAtTime(0.0006,now+hold+0.30);    // felt damper, not a hard cut
+  src.connect(lp); lp.connect(g); g.connect(pianoGain);
+  src.start(now); src.stop(now+hold+0.40);
 }
 
 /* ---------- geometry ---------- */
@@ -412,8 +432,14 @@ fetch('notes.json').then(r=>r.json()).then(d=>{
   D=d; notes=d.notes; LO=d.range[0]; HI=d.range[1];
   $('loopA').max=d.nbars; $('loopB').max=d.nbars;
   resize(); buildLHGroups(); applyLH();
-  setTimeout(()=>{ buildPiano(); $('boot').style.display='none';
-                   requestAnimationFrame(frame); },30);
+  $('boot').textContent='loading piano…';
+  loadPiano().then(n=>{
+    if(!n){ $('boot').textContent='samples missing — using modelled piano';
+            buildPianoFallback(); }
+    $('boot').style.display='none';
+    requestAnimationFrame(frame);
+  }).catch(()=>{ buildPianoFallback(); $('boot').style.display='none';
+                 requestAnimationFrame(frame); });
 });
 </script>
 </body>
