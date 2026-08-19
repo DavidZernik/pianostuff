@@ -32,6 +32,8 @@
   #play.playing{background:#2c313c;color:var(--text)}
   #play:hover{filter:brightness(1.08)}
   #rew{width:42px;height:42px;border-radius:10px;font-size:16px}
+  .jump{height:42px;padding:0 13px;border-radius:10px;font-size:13px;font-weight:650;
+        font-variant-numeric:tabular-nums}
   #seek{flex:1;min-width:120px;accent-color:var(--rh);height:5px}
   #pos{font-variant-numeric:tabular-nums;color:var(--dim);font-size:13px;
        min-width:132px;text-align:right}
@@ -88,6 +90,8 @@
   <div id="transport">
     <button id="play">Play</button>
     <button id="rew" title="back to start">↺</button>
+    <button id="back5" class="jump" title="back 5 seconds">−5s</button>
+    <button id="fwd5" class="jump" title="forward 5 seconds">+5s</button>
     <input id="seek" type="range" min="0" max="1000" value="0">
     <span id="pos">bar <b>1</b> · 0:00</span>
     <span id="chordnow">—</span>
@@ -175,7 +179,7 @@
           <option value="keys-bass-vocals.mp3" data-keys="1">keyboard + bass + vocals</option>
           <option value="song.mp3" data-keys="1" data-drums="1">full song</option>
         </select>
-        <span class="cap">Vol</span><input id="ovol" type="range" min="0" max="100" value="55">
+        <span class="cap">Vol</span><input id="ovol" type="range" min="0" max="100" value="70">
       </div>
     </div>
   </div>
@@ -783,7 +787,11 @@ function setPlaying(v){
   syncOverlay(true);
 }
 $('play').onclick=()=>{ ac().resume(); setPlaying(!playing); };
-$('rew').onclick=()=>{ t=0; sched.clear(); lastTick=-1; syncOverlay(true); };
+function seekTo(x){ t=Math.max(0,Math.min(D.duration,x)); sched.clear(); lastTick=-1;
+                    syncOverlay(true); }
+$('rew').onclick=()=>seekTo(0);
+$('back5').onclick=()=>seekTo(t-5);
+$('fwd5').onclick=()=>seekTo(t+5);
 $('seek').oninput=e=>{ t=e.target.value/1000*D.duration; sched.clear(); lastTick=-1; syncOverlay(true); };
 $('btnR').onclick=()=>{ showR=!showR; $('btnR').classList.toggle('on',showR); computeFingering(); };
 $('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); computeFingering(); };
@@ -841,8 +849,9 @@ $('gear').onclick=()=>{ const m=$('more');
 addEventListener('keydown',e=>{
   if(/INPUT|SELECT/.test(e.target.tagName)) return;
   if(e.code==='Space'){ e.preventDefault(); $('play').click(); }
-  if(e.code==='ArrowLeft'){ t=Math.max(0,t-D.bar); sched.clear(); lastTick=-1; syncOverlay(true); }
-  if(e.code==='ArrowRight'){ t=Math.min(D.duration,t+D.bar); sched.clear(); lastTick=-1; syncOverlay(true); }
+  // arrows step a bar; hold shift for the same 5 seconds as the buttons
+  if(e.code==='ArrowLeft')  seekTo(t-(e.shiftKey?5:D.bar));
+  if(e.code==='ArrowRight') seekTo(t+(e.shiftKey?5:D.bar));
 });
 
 /* ---------- boot ---------- */
