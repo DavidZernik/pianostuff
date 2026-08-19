@@ -55,6 +55,7 @@
   select{background:var(--sunk);color:var(--text);border:1px solid var(--line);
          border-radius:8px;padding:8px 10px;font-size:13px;font-weight:500}
   input[type=checkbox]{accent-color:var(--rh);width:15px;height:15px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text);cursor:pointer}
 
   /* ---------- collapsible setup ---------- */
   #more{width:100%;border-top:1px solid var(--line);display:none;
@@ -126,8 +127,9 @@
 
     <div class="group"><span class="cap">Display</span>
       <div class="items">
-        <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text)">
-          <input id="chordHUD" type="checkbox" checked> Big chord name</label>
+        <label class="chk"><input id="chordHUD" type="checkbox" checked> Chord name</label>
+        <label class="chk"><input id="fingNum" type="checkbox" checked> Finger numbers</label>
+        <label class="chk"><input id="showHands" type="checkbox" checked> Hands</label>
       </div>
     </div>
 
@@ -166,6 +168,7 @@ const $=id=>document.getElementById(id);
 const cv=$('c'), ctx=cv.getContext('2d'), ov=$('ov');
 let D=null, LO=29, HI=96, notes=[], W=0,H=0,dpr=1;
 let t=0, playing=false, speed=1, simp=18, showR=true, showL=true, last=0;
+let fingOn=true, handsOn=true;
 const PPS=190;
 let audio=null, sched=new Set(), pianoGain=null, percGain=null, BUF={}, BASES=[];
 let NOISE=null, percOn=false, lastTick=-1;
@@ -298,6 +301,156 @@ function applyLH(){
 const visible = n => n.v>=simp &&
   (n.h==='r' ? showR : (showL && (!lhAllow || lhAllow.has(n))));
 
+/* ---------- fingering ----------
+   Parncutt-style ergonomic costs minimised with dynamic programming over melodic
+   runs; chords are solved by exhaustive search over finger combinations (at most
+   C(5,3)=10 options). Comfortable spans in semitones per finger pair, right hand;
+   the left hand is the mirror image, so pitch order is simply reversed.
+   This is a suggestion, not gospel — even trained models only match a human's
+   choice about two thirds of the time. */
+const SPAN={12:[1,10],13:[3,12],14:[4,14],15:[5,15],
+            23:[1, 4],24:[2, 6],25:[3, 8],
+            34:[1, 3],35:[2, 5],
+            45:[1, 3]};
+const spanOf=(a,b)=>SPAN[Math.min(a,b)*10+Math.max(a,b)]||[1,12];
+function noteCost(f,p){
+  if(!isBlack(p)) return f===1?0:0.05;
+  return f===1?1.7:(f===5?0.9:0);            // thumb hates black keys, pinky dislikes them
+}
+function transCost(f1,p1,f2,p2,hand){
+  const d=(p2-p1)*(hand==='r'?1:-1);         // mirror the left hand
+  if(f1===f2) return d===0?0:2.2+Math.abs(d)*0.35;
+  const [mn,mx]=spanOf(f1,f2);
+  const dd=(f2>f1)?d:-d;                     // expected direction for this finger move
+  if(dd<0){                                  // a crossing
+    return (f1===1||f2===1) ? 2.0+Math.abs(dd)*0.22   // thumb under/over: normal technique
+                            : 4.8+Math.abs(dd)*0.45;  // otherwise awkward
+  }
+  if(dd<mn) return (mn-dd)*0.8;              // cramped
+  if(dd>mx) return (dd-mx)*1.35;             // stretched
+  return 0;
+}
+function fingerRun(ns,hand){
+  const N=ns.length, cost=[], back=[];
+  for(let f=0;f<5;f++){ cost.push([noteCost(f+1,ns[0].p)]); back.push([0]); }
+  for(let k=1;k<N;k++){
+    for(let f=0;f<5;f++){
+      let best=Infinity,bi=0;
+      for(let a=0;a<5;a++){
+        const c=cost[a][k-1]+transCost(a+1,ns[k-1].p,f+1,ns[k].p,hand);
+        if(c<best){best=c;bi=a;}
+      }
+      cost[f][k]=best+noteCost(f+1,ns[k].p); back[f][k]=bi;
+    }
+  }
+  let f=0; for(let i=1;i<5;i++) if(cost[i][N-1]<cost[f][N-1]) f=i;
+  const out=new Array(N);
+  for(let k=N-1;k>=0;k--){ out[k]=f+1; f=back[f][k]; }
+  return out;
+}
+let COMBOS={};
+function combosOf(n){
+  if(COMBOS[n]) return COMBOS[n];
+  const out=[];
+  (function gen(start,acc){
+    if(acc.length===n){ out.push(acc.slice()); return; }
+    for(let f=start;f<=5;f++){ acc.push(f); gen(f+1,acc); acc.pop(); }
+  })(1,[]);
+  return COMBOS[n]=out;
+}
+function fingerChord(ps,hand){               // ps ascending in pitch
+  if(ps.length<1||ps.length>5) return null;  // a hand has five fingers
+  let best=null,bc=Infinity;
+  for(const c of combosOf(ps.length)){
+    const fs = hand==='r' ? c : c.slice().reverse();   // LH: thumb on top
+    let cost=0;
+    for(let i=0;i<ps.length;i++) cost+=noteCost(fs[i],ps[i]);
+    for(let i=0;i+1<ps.length;i++){
+      const d=ps[i+1]-ps[i], [mn,mx]=spanOf(fs[i],fs[i+1]);
+      if(d<mn) cost+=(mn-d)*0.8;
+      if(d>mx) cost+=(d-mx)*1.35;
+    }
+    if(cost<bc){bc=cost;best=fs;}
+  }
+  return best;
+}
+function computeFingering(){
+  for(const n of notes) n.f=null;
+  for(const hand of ['r','l']){
+    const groups=new Map();
+    for(const n of notes){
+      if(n.h!==hand||!visible(n)) continue;
+      const k=Math.round(n.t*1000);
+      if(!groups.has(k)) groups.set(k,[]);
+      groups.get(k).push(n);
+    }
+    const keys=[...groups.keys()].sort((a,b)=>a-b);
+    let run=[];
+    const flush=()=>{ if(!run.length) return;
+      const fs=fingerRun(run,hand); run.forEach((n,i)=>n.f=fs[i]); run=[]; };
+    for(const k of keys){
+      const g=groups.get(k).sort((a,b)=>a.p-b.p);
+      if(g.length===1){ run.push(g[0]); if(run.length>=180) flush(); }
+      else {
+        flush();
+        // more notes than fingers: keep the outer voices plus a spread of the middle
+        let sel=g;
+        if(g.length>5){
+          const idx=new Set([0,g.length-1]);
+          for(let i=1;i<4;i++) idx.add(Math.round(i*(g.length-1)/4));
+          sel=[...idx].sort((a,b)=>a-b).slice(0,5).map(i=>g[i]);
+        }
+        const fs=fingerChord(sel.map(n=>n.p),hand);
+        if(fs) sel.forEach((n,i)=>n.f=fs[i]);
+      }
+    }
+    flush();
+  }
+}
+
+/* ---------- hand glyph ----------
+   Fit finger position across the keyboard from whichever fingers are down, then
+   place the other fingers on that line. Shows where the hand IS and how far it's
+   stretched — the thing lit keys alone can't tell you. */
+function drawHand(hand,pts){
+  if(!pts.length) return;
+  let m,c;
+  const dflt=wKeyW*1.05*(hand==='r'?1:1);
+  if(pts.length===1){ m=dflt; c=pts[0].x-m*pts[0].f; }
+  else{
+    const n=pts.length;
+    const sf=pts.reduce((a,p)=>a+p.f,0), sx=pts.reduce((a,p)=>a+p.x,0);
+    const sff=pts.reduce((a,p)=>a+p.f*p.f,0), sfx=pts.reduce((a,p)=>a+p.f*p.x,0);
+    const den=n*sff-sf*sf;
+    m = den ? (n*sfx-sf*sx)/den : dflt;
+    if(!isFinite(m)||Math.abs(m)<wKeyW*0.45) m=dflt;
+    c=(sx-m*sf)/n;
+  }
+  const col = hand==='r' ? '#4a9eff' : '#ff8c42';
+  const down=new Set(pts.map(p=>p.f));
+  const xs=[1,2,3,4,5].map(f=>Math.max(6,Math.min(W-6,m*f+c)));
+  const cx=xs.reduce((a,b)=>a+b,0)/5;
+  const tipY=KEYTOP+KEYH*0.34, palmY=KEYTOP+KEYH*0.90;
+  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle=col; ctx.fillStyle=col;
+  ctx.globalAlpha=0.22; ctx.beginPath();
+  ctx.ellipse(cx,palmY,Math.max(wKeyW*1.7,26),13,0,0,6.2832); ctx.fill();
+  ctx.globalAlpha=0.9; ctx.lineWidth=2.4;
+  for(let i=0;i<5;i++){
+    const f=i+1, x=xs[i], y=down.has(f)?tipY+9:tipY-7;
+    ctx.globalAlpha=down.has(f)?0.95:0.40;
+    ctx.beginPath(); ctx.moveTo(cx,palmY-4); ctx.lineTo(x,y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,down.has(f)?8:5.5,0,6.2832);
+    if(down.has(f)){ ctx.fillStyle=col; ctx.fill(); }
+    ctx.stroke();
+    if(down.has(f)){
+      ctx.fillStyle='#0b1220'; ctx.font='bold 10px system-ui'; ctx.textAlign='center';
+      ctx.fillText(f,x,y+3.5); ctx.fillStyle=col;
+    }
+  }
+  ctx.restore();
+}
+
 /* ---------- helpers ---------- */
 const barOf = s => Math.floor((s-D.downbeat)/D.bar)+1;
 const timeOfBar = b => D.downbeat+(b-1)*D.bar;
@@ -391,10 +544,16 @@ function render(){
     const pad=k.black?1.5:2.5;
     roundRect(k.x+pad,Math.max(y,-40),Math.max(k.w-pad*2,3),Math.min(h,KEYTOP-y+40),3);
     ctx.fill();
+    if(fingOn && n.f && h>=17 && k.w>=11 && yEnd>18 && yEnd<KEYTOP+6){
+      ctx.fillStyle='rgba(7,13,22,0.92)';
+      ctx.font='bold 11px -apple-system,system-ui,sans-serif'; ctx.textAlign='center';
+      ctx.fillText(n.f, k.x+k.w/2, Math.min(yEnd,KEYTOP)-6);
+    }
   }
-  const active=new Map();
+  const active=new Map(), handPts={r:[],l:[]};
   for(const n of notes){ if(n.t>t) break;
-    if(t<n.t+n.d&&visible(n)) active.set(n.p,n.h); }
+    if(t<n.t+n.d&&visible(n)){ active.set(n.p,n.h);
+      if(n.f){ const k=keyRect(n.p); handPts[n.h].push({f:n.f,x:k.x+k.w/2}); } } }
   ctx.fillStyle='#080a0e'; ctx.fillRect(0,KEYTOP-3,W,3);
   for(let p=LO;p<=HI;p++){ if(isBlack(p)) continue;
     const k=keyRect(p), a=active.get(p);
@@ -406,6 +565,7 @@ function render(){
     const k=keyRect(p), a=active.get(p);
     ctx.fillStyle=a?(a==='r'?'#2f7fd6':'#d66d24'):'#141821';
     ctx.fillRect(k.x,KEYTOP,k.w,KEYH*0.62); }
+  if(handsOn){ drawHand('l',handPts.l); drawHand('r',handPts.r); }
   drawChordHUD();
   $('pos').innerHTML=`bar <b>${Math.max(1,barOf(t))}</b> · ${fmt(t)} / ${fmt(D.duration)}`;
   $('chordnow').textContent=chordAt(t);
@@ -422,12 +582,16 @@ function setPlaying(v){
 $('play').onclick=()=>{ ac().resume(); setPlaying(!playing); };
 $('rew').onclick=()=>{ t=0; sched.clear(); lastTick=-1; syncOverlay(true); };
 $('seek').oninput=e=>{ t=e.target.value/1000*D.duration; sched.clear(); lastTick=-1; syncOverlay(true); };
-$('btnR').onclick=()=>{ showR=!showR; $('btnR').classList.toggle('on',showR); };
-$('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); };
-$('lhmode').onchange=()=>{ applyLH(); sched.clear(); };
+$('btnR').onclick=()=>{ showR=!showR; $('btnR').classList.toggle('on',showR); computeFingering(); };
+$('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); computeFingering(); };
+$('lhmode').onchange=()=>{ applyLH(); computeFingering(); sched.clear(); };
+$('fingNum').onchange=e=>{ fingOn=e.target.checked; };
+$('showHands').onchange=e=>{ handsOn=e.target.checked; };
 $('speed').oninput=e=>{ speed=e.target.value/100; $('speedv').textContent=e.target.value+'%'; syncOverlay(true); };
+let simpT=null;
 $('simp').oninput=e=>{ simp=+e.target.value;
-  $('simpv').textContent= simp<=18?'all':(simp>=60?'sparse':'med'); };
+  $('simpv').textContent= simp<=18?'all':(simp>=60?'sparse':'med');
+  clearTimeout(simpT); simpT=setTimeout(computeFingering,120); };
 $('pvol').oninput=e=>{ if(pianoGain) pianoGain.gain.value=e.target.value/100; };
 $('btnP').onclick=()=>{ ac().resume(); percOn=!percOn; lastTick=-1;
   $('btnP').classList.toggle('on',percOn); $('btnP').textContent=percOn?'On':'Off'; };
@@ -457,7 +621,7 @@ addEventListener('keydown',e=>{
 fetch('notes.json').then(r=>r.json()).then(d=>{
   D=d; notes=d.notes; LO=d.range[0]; HI=d.range[1];
   $('loopA').max=d.nbars; $('loopB').max=d.nbars;
-  resize(); buildLHGroups(); applyLH();
+  resize(); buildLHGroups(); applyLH(); computeFingering();
   loadPiano().then(()=>{ $('boot').style.display='none'; requestAnimationFrame(frame); })
              .catch(()=>{ $('boot').style.display='none'; requestAnimationFrame(frame); });
 });
