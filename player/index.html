@@ -55,6 +55,12 @@
   <div class="row">
     <button id="btnR" class="on">Right hand</button>
     <button id="btnL" class="lh on">Left hand</button>
+    <select id="lhmode" title="how thick the left hand plays">
+      <option value="full">LH: as transcribed</option>
+      <option value="duo" selected>LH: 2 notes max</option>
+      <option value="oct">LH: root + octave</option>
+      <option value="roots">LH: roots only</option>
+    </select>
     <label>Piano vol <input id="pvol" type="range" min="0" max="100" value="85"></label>
     <div class="sep"></div>
     <label>Speed <input id="speed" type="range" min="10" max="100" value="100"><b id="speedv">100%</b></label>
@@ -242,7 +248,40 @@ addEventListener('resize',resize);
 /* ---------- helpers ---------- */
 const barOf = s => Math.floor((s-D.downbeat)/D.bar)+1;
 const timeOfBar = b => D.downbeat+(b-1)*D.bar;
-const visible = n => (n.h==='r'?showR:showL) && n.v>=simp;
+/* ---------- left-hand thinning ----------
+   Low stacked notes go muddy and no pianist voices them that way. Group the LH by
+   attack instant, then keep only what a hand would realistically play down there. */
+let lhGroups=null, lhAllow=null;
+function buildLHGroups(){
+  lhGroups=new Map();
+  for(const n of notes){
+    if(n.h!=='l') continue;
+    const k=Math.round(n.t*1000);
+    if(!lhGroups.has(k)) lhGroups.set(k,[]);
+    lhGroups.get(k).push(n);
+  }
+}
+function applyLH(){
+  const mode=$('lhmode').value;
+  lhAllow=new Set();
+  for(const arr of lhGroups.values()){
+    const s=arr.slice().sort((a,b)=>a.p-b.p);
+    let keep;
+    if(mode==='full') keep=s;
+    else if(mode==='roots') keep=[s[0]];
+    else if(mode==='oct'){
+      const oct=s.find(n=>n.p===s[0].p+12);
+      keep = oct ? [s[0],oct] : [s[0]];
+    } else {                                   // duo: bottom + top of the voicing
+      keep = s.length<2 ? [s[0]] : [s[0], s[s.length-1]];
+      if(s[0].p<40) keep=[s[0]];                            // very low: one note only
+      if(keep.length===2 && keep[1].p-keep[0].p<5 && keep[0].p<48) keep=[keep[0]];
+    }
+    for(const n of keep) lhAllow.add(n);
+  }
+}
+const visible = n => n.v>=simp &&
+  (n.h==='r' ? showR : (showL && (!lhAllow || lhAllow.has(n))));
 function chordAt(s){ let c='—'; for(const k of D.chords){ if(k.t<=s+0.02) c=k.name; else break; } return c; }
 const fmt = s => `${Math.floor(Math.max(s,0)/60)}:${String(Math.floor(Math.max(s,0)%60)).padStart(2,'0')}`;
 const absTime = s => s + D.downbeat + syncOff;   // player clock -> audio file clock
@@ -347,6 +386,7 @@ $('soff').oninput=e=>{ syncOff=+e.target.value/1000;
   $('soffv').textContent=e.target.value+'ms'; aRef=null; syncOverlay(true); };
 $('btnR').onclick=()=>{ showR=!showR; $('btnR').classList.toggle('on',showR); };
 $('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); };
+$('lhmode').onchange=()=>{ applyLH(); sched.clear(); };
 $('speed').oninput=e=>{ speed=e.target.value/100; $('speedv').textContent=e.target.value+'%'; syncOverlay(true); };
 $('simp').oninput=e=>{ simp=+e.target.value;
   $('simpv').textContent= simp<=18?'all':(simp>=60?'sparse':'med'); };
@@ -371,7 +411,7 @@ setInterval(()=>{ if(playing) syncOverlay(false); },700);
 fetch('notes.json').then(r=>r.json()).then(d=>{
   D=d; notes=d.notes; LO=d.range[0]; HI=d.range[1];
   $('loopA').max=d.nbars; $('loopB').max=d.nbars;
-  resize();
+  resize(); buildLHGroups(); applyLH();
   setTimeout(()=>{ buildPiano(); $('boot').style.display='none';
                    requestAnimationFrame(frame); },30);
 });
