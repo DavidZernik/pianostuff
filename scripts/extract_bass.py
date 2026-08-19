@@ -39,48 +39,53 @@ C = np.abs(librosa.cqt(y, sr=sr, hop_length=HOP, fmin=librosa.midi_to_hz(LO),
 FPS = sr / HOP
 floor = np.percentile(C.sum(axis=0), 45)      # below this the bass is not playing
 
-# Where a note is stamped matters as much as which note it is. Reading the loudest
-# pitch in a slot and stamping it at the slot boundary is a floor, not a round: a
-# note starting three quarters of the way through its slot is dragged a whole
-# sixteenth early, and only ever in that direction. Measured against the stem's
-# own attacks that put the bass 155ms out while the keyboard sat at 8ms — visible
-# in the player as the bass leading the right hand. So find the attack inside the
-# slot and round it the way the keyboard is rounded.
+# A note starts where there is an attack. The first version instead emitted a note
+# for every sixteenth-slot whose bass energy cleared a floor, which chops a held
+# note into a chain of re-strikes on sixteenths where nothing happens: of the 302
+# such notes that landed without a right-hand note beside them, only 15% sat on a
+# real attack, median attack strength -0.05 — below the average of the track. In
+# the player that showed up as the left hand playing where the right hand was
+# silent, which is what gave it away.
+#
+# So detect the attacks first, take the pitch at each one, and let a note sustain
+# until the next attack rather than re-striking it every sixteenth.
 onset = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP)
+# delta chosen by sweep, not by eye: 0.15 through 0.02 all hold the same musical
+# validity (48-51% of duration on the chord root), but 0.03-0.04 puts the notes on
+# the strongest attacks. A bass attack is soft, so the usual 0.3 finds only 59 of
+# them in the whole song.
+attacks = librosa.onset.onset_detect(onset_envelope=onset, sr=sr, hop_length=HOP,
+                                     units='time', backtrack=False,
+                                     delta=0.04, wait=int(0.09 * FPS))
+print(f"{len(attacks)} attacks in the bass stem")
 
-best = {}
-for k in range(int(DUR / SX)):
-    f0 = int((k * SX + DOWN) * FPS)
-    f1 = int(((k + 1) * SX + DOWN) * FPS)
-    if f0 < 0 or f1 > C.shape[1] or f1 <= f0: continue
+def pitch_at(t):
+    f0 = int(t * FPS); f1 = int((t + 0.13) * FPS)
+    if f0 < 0 or f1 > C.shape[1] or f1 <= f0: return None
     w = C[:, f0:f1]
-    if w.sum(axis=0).max() < floor: continue
+    if w.sum(axis=0).max() < floor: return None
     e = w.max(axis=1)
     b = int(np.argmax(e))
     # a synth bass has a loud second harmonic; if the octave below carries real
     # weight, that is the fundamental and the peak is its overtone
     if b - 12 >= 0 and e[b - 12] > e[b] * 0.30: b -= 12
-    # this bass lives at F1 to C3; anything under E1 is the correction overshooting
-    # into rumble, so put it back
+    # this bass lives at F1 to C3; under E1 is the correction dropping into rumble
     if LO + b < 28: b += 12
-    seg = onset[f0:f1]
-    if not len(seg): continue
-    at = (f0 + int(np.argmax(seg))) / FPS - DOWN
-    kk = int(round(at / SX))
-    strength = float(seg.max())
-    if kk not in best or best[kk][1] < strength: best[kk] = (LO + b, strength)
+    return LO + b
 
-slots = {k: v[0] for k, v in best.items()}
+slots = {}
+for t in attacks:
+    p = pitch_at(t)
+    if p is None: continue
+    slots[int(round((t - DOWN) / SX))] = p
 
-# merge repeated pitches into held notes
-out, ks = [], sorted(slots)
-i = 0
-while i < len(ks):
-    j = i
-    while j + 1 < len(ks) and ks[j + 1] == ks[j] + 1 and slots[ks[j + 1]] == slots[ks[i]]:
-        j += 1
-    out.append([slots[ks[i]], round(ks[i] * SX, 4), round((ks[j] - ks[i] + 1) * SX, 4)])
-    i = j + 1
+# each note holds until the next attack, capped at half a bar so a rest does not
+# turn into a drone
+ks = sorted(slots)
+out = []
+for i, k in enumerate(ks):
+    nxt = ks[i + 1] if i + 1 < len(ks) else k + 2
+    out.append([slots[k], round(k * SX, 4), round(min(nxt - k, 8) * SX, 4)])
 
 json.dump(out, open(OUT, 'w'))
 ps = [p for p, t, d in out]

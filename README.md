@@ -211,20 +211,35 @@ gets 66%. So the extractor takes the strongest CQT bin per sixteenth, then check
 below, because a synth bass has a second harmonic loud enough to notate the whole line an
 octave high.
 
-The result is 496 notes, F1–C3, median B♭1, 47% of its duration on the chord root, with
-chromatic approach notes into the B♭ bars — a bass line, not a pitch trace.
+The result is 232 notes, F1–C3, median B♭1, **54% of its duration on the chord root and 64% on
+root or fifth**, with chromatic approach notes into the B♭ bars — a bass line, not a pitch trace.
 
-Where a note is stamped matters as much as which note it is. Reading the loudest pitch in a
-sixteenth-slot and stamping it at the slot boundary is a floor, not a round: a note starting
-three quarters of the way through its slot is dragged a whole sixteenth early, and only ever in
-that direction. Measured against each stem's own attacks, that put the bass **155ms out while
-the keyboard sat at 8ms** — one sixteenth is 148ms, so the bass visibly led the right hand in
-the player. The extractor now finds the attack inside the slot and rounds it the way the
-keyboard is rounded: **both parts now measure +10ms.**
+**A note starts where there is an attack.** Two earlier versions got this wrong and both were
+caught by eye in the player before any measurement was taken.
 
-That comparison is the test worth running whenever a part is added from a new pipeline. The
-bass scores lower against its own attacks than the keyboard does (0.86 against 2.24) simply
-because a bass attack is softer than a piano's, not because it is misplaced.
+The first walked sixteenth-slots and stamped each note at its slot boundary. That is a floor,
+not a round, so a note starting three quarters of the way through its slot was dragged a whole
+sixteenth early — and only ever in that direction. Against each stem's own attacks it measured
+**155ms out while the keyboard sat at 8ms**; a sixteenth is 148ms.
+
+The second rounded correctly but still emitted a note for every slot whose energy cleared a
+floor, which chops a held note into a chain of re-strikes on sixteenths where nothing happens.
+Of the 302 such notes that landed without a right-hand note beside them, only 15% sat on a real
+attack, at a median attack strength of −0.05 — below the average of the whole track.
+
+The extractor now detects attacks first, reads the pitch at each one, and lets a note sustain to
+the next attack. `delta` is 0.04, chosen by sweep: everything from 0.15 to 0.02 holds the same
+musical validity, but 0.03–0.04 puts the notes on the strongest attacks. The usual 0.3 finds
+only 59 attacks in the entire song, because a bass attack is soft.
+
+| | before | after |
+|---|---|---|
+| onset alignment | +155ms, then +10ms at score 0.86 | **+10ms at score 3.11** (keyboard: 2.24) |
+| notes with no right-hand note beside them | 15% on a real attack | **68%** |
+| shares a sixteenth with the right hand | 35% | **52%** |
+| duration on the chord root | 47% | **54%** |
+
+Run that comparison whenever a part arrives from a new pipeline.
 
 Once the bass is in, the left hand is doing two jobs at once, so it gets its own clamp rule:
 the bass note is kept whatever happens, and a shell is allowed above it out to a twelfth. You
