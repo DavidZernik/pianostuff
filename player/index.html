@@ -205,7 +205,7 @@ let NOISE=null, percOn=false, lastTick=-1;
 /* Output latency compensation. No control on it: on wired or built-in output the
    delay is a few milliseconds and invisible. Bluetooth runs 100-300ms and would
    need this — put a slider back on it if that ever comes up. */
-let syncOff=0, aRef=null, wRef=0;
+let syncOff=0, aRef=null, wRef=0, seekGoal=null, seekAt=0, seekWarned=false;
 
 /* ---------- audio graph ---------- */
 function ac(){
@@ -647,7 +647,8 @@ const ovLive = () => !!$('src').value && ov.readyState>=2;
 function syncOverlay(force){
   if(!ovLive()) return;
   ov.playbackRate=speed;
-  if(force){ ov.currentTime=Math.max(0,t+D.downbeat+syncOff); aRef=null; }
+  if(force){ seekGoal=Math.max(0,t+D.downbeat+syncOff); ov.currentTime=seekGoal;
+             seekAt=performance.now(); aRef=null; }
   if(playing && ov.paused) ov.play().catch(()=>{});
   if(!playing && !ov.paused) ov.pause();
 }
@@ -659,8 +660,20 @@ function frame(ts){
   if(playing){
     if(ovLive() && !ov.paused){
       const ct=ov.currentTime, wall=ts/1000;
-      if(aRef===null||Math.abs(ct-aRef)>0.0005){ aRef=ct; wRef=wall; }
-      t=(aRef+(wall-wRef)*speed)-D.downbeat-syncOff;
+      if(seekGoal!==null && Math.abs(ct-seekGoal)>0.35){
+        /* The audio has not landed on the seek yet. Keep our own clock rather than
+           be dragged to wherever the element currently is — if the server does not
+           answer range requests the seek never lands at all, and following it sent
+           the whole player back to bar 1 on every click of the timeline. */
+        aRef=null; t+=dt*speed;
+        if(!seekWarned && performance.now()-seekAt>2500){ seekWarned=true;
+          console.warn('play-along will not seek — the server is ignoring HTTP range '+
+                       'requests. Serve with scripts/serve.py, not python -m http.server.'); }
+      } else {
+        seekGoal=null;
+        if(aRef===null||Math.abs(ct-aRef)>0.0005){ aRef=ct; wRef=wall; }
+        t=(aRef+(wall-wRef)*speed)-D.downbeat-syncOff;
+      }
     } else { aRef=null; t+=dt*speed; }
     if($('loopOn').checked){
       const a=timeOfBar(+$('loopA').value), b=timeOfBar(+$('loopB').value+1);

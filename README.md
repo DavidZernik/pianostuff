@@ -117,9 +117,13 @@ moves closer corrected 17 notes (4%) and produced a smooth, singable line.
 ## Running the player
 
 ```bash
-cd player && python3 -m http.server 8899
-open http://127.0.0.1:8899/
+./scripts/serve.py          # then open http://127.0.0.1:8899/
 ```
+
+**Not `python3 -m http.server`.** It does not implement HTTP Range, and without Range a browser
+cannot seek inside a media file: `audio.currentTime = x` silently fails and the element snaps
+back to 0. The player follows the audio clock, so that dragged the display with it and clicking
+anywhere on the timeline restarted the song. `scripts/serve.py` answers ranges with 206.
 
 Audio is gitignored. Copy `song.mp3` (full mix) and `keys.mp3` (the Keyboard stem) into
 `player/`, then build the rest with `./scripts/build_playalong.sh`:
