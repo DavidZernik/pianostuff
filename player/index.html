@@ -118,6 +118,7 @@
           <option value="oct">root + octave</option>
           <option value="roots">roots only</option>
         </select>
+        <label class="chk" title="the Bass stem, transcribed — there is no bassist when you play this alone"><input id="bassOn" type="checkbox" checked> Bass line</label>
         <span class="cap" title="hide notes that barely sound in the recording">Hide faint</span>
         <input id="simp" type="range" min="0" max="40" value="0">
         <span class="val wide" id="simpv">all 1903</span>
@@ -185,6 +186,7 @@
 const $=id=>document.getElementById(id);
 const cv=$('c'), ctx=cv.getContext('2d'), ov=$('ov');
 let D=null, LO=29, HI=96, notes=[], W=0,H=0,dpr=1;
+let bassOn=true;
 let t=0, playing=false, speed=1, simp=0, showR=true, showL=true, last=0;
 let fingOn=true, handsOn=true;
 const PPS=190;
@@ -303,7 +305,7 @@ addEventListener('resize',resize);
 let lhGroups=null, lhAllow=null;
 function buildLHGroups(){
   lhGroups=new Map();
-  for(const n of notes){ if(n.h!=='l') continue;
+  for(const n of notes){ if(n.h!=='l'||n.b) continue;   // bass is the anchor, never thinned
     const k=Math.round(n.t*1000);
     if(!lhGroups.has(k)) lhGroups.set(k,[]);
     lhGroups.get(k).push(n); }
@@ -335,14 +337,26 @@ function applyReach(){
   const R=+$('reach').value;
   if(R>=99) return;
   for(const hand of ['r','l']){
-    const pool=notes.filter(n=>n.h===hand && (hand==='r' || !lhAllow || lhAllow.has(n)))
+    const pool=notes.filter(n=>n.h===hand &&
+        (hand==='r' || (n.b ? bassOn : (!lhAllow || lhAllow.has(n)))))
                     .sort((a,b)=>a.t-b.t);
     for(let i=0;i<pool.length;){
       let j=i; while(j+1<pool.length && pool[j+1].t-pool[i].t<=0.03) j++;
       const g=pool.slice(i,j+1).sort((a,b)=>a.p-b.p); i=j+1;
       if(g.length<2 || g[g.length-1].p-g[0].p<=R) continue;
       let win;
-      if(hand==='l'){ win=g.filter(n=>n.p<=g[0].p+R); }
+      if(hand==='l'){
+        // With the bass line on, the left hand is doing two jobs: the bass note and
+        // a shell above it. You strike them in turn and hold with the pedal, so the
+        // gap between them is not a reach — but a shell more than a twelfth up is
+        // a different register, not a voicing, so it goes.
+        const bs=g.filter(n=>n.b), rest=g.filter(n=>!n.b);
+        if(bs.length){
+          const lo=bs[0].p;
+          const keep=rest.filter(n=>n.p<=lo+19);
+          win=bs.concat(keep.length ? keep.filter(n=>n.p<=keep[0].p+R) : []);
+        } else win=g.filter(n=>n.p<=g[0].p+R);
+      }
       else{
         let best=null;
         for(const a of g){
@@ -360,7 +374,8 @@ function applyReach(){
 }
 const str = n => n.s==null ? 100 : n.s;
 const visible = n => str(n)>=simp && !reachDrop.has(n) &&
-  (n.h==='r' ? showR : (showL && (!lhAllow || lhAllow.has(n))));
+  (n.h==='r' ? showR
+             : showL && (n.b ? bassOn : (!lhAllow || lhAllow.has(n))));
 
 /* ---------- fingering ----------
    Parncutt-style ergonomic costs minimised with dynamic programming over melodic
@@ -720,6 +735,7 @@ $('btnR').onclick=()=>{ showR=!showR; $('btnR').classList.toggle('on',showR); co
 $('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); computeFingering(); };
 $('lhmode').onchange=()=>{ applyLH(); applyReach(); computeFingering(); sched.clear(); };
 $('reach').onchange=()=>{ applyReach(); computeFingering(); sched.clear(); };
+$('bassOn').onchange=e=>{ bassOn=e.target.checked; applyReach(); computeFingering(); sched.clear(); };
 $('fingNum').onchange=e=>{ fingOn=e.target.checked; };
 $('showHands').onchange=e=>{ handsOn=e.target.checked; };
 $('speed').oninput=e=>{ speed=e.target.value/100; $('speedv').textContent=e.target.value+'%'; syncOverlay(true); };

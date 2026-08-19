@@ -41,7 +41,15 @@ def clamp(group, hand):
     """
     g=sorted(group, key=lambda n:n['p'])
     if len(g)<2 or g[-1]['p']-g[0]['p']<=REACH: return g
-    if hand=='l': return [n for n in g if n['p']<=g[0]['p']+REACH]
+    if hand=='l':
+        # the left hand does two jobs once the bass line is in: the bass note and a
+        # shell above it, struck in turn and held with the pedal. The gap between
+        # them is not a reach; a shell more than a twelfth up is another register.
+        bs=[n for n in g if n.get('b')]
+        if bs:
+            rest=[n for n in g if not n.get('b') and n['p']<=bs[0]['p']+19]
+            return bs+[n for n in rest if n['p']<=rest[0]['p']+REACH] if rest else bs
+        return [n for n in g if n['p']<=g[0]['p']+REACH]
     best=None
     for a in g:
         w=[n for n in g if a['p']<=n['p']<=a['p']+REACH]

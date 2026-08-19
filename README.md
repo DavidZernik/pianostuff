@@ -137,6 +137,36 @@ density mode, a reach clamp, and a "hide faint" slider. Space plays, arrows jump
 Piano sound is the Salamander Grand sampled every three semitones, so what you see and what
 you hear are always the same data.
 
+### The bass line
+
+There is no bassist. Playing this alone, the left hand has to cover the bass, and the
+transcribed left hand does not: it is only the Keyboard stem below middle C, and its lowest
+note is the chord root barely half the time. The Bass stem is a separate instrument, louder
+than the Keyboard (−24.3 dB against −28.5), sitting at F1 to C2. `extract_bass.py` transcribes
+it and `merge_bass.py` folds it into the left hand, tagged so the player can switch it off.
+
+**There is no brass.** The Brass stem is digital silence — peak −55 dB, RMS −108 dB, identical
+to the empty "Other" stem. Suno emitted the slot and put nothing in it. The bass-register part
+you can hear is the Bass stem; the horn-like line above it is Synth, centred around F3–B♭3.
+
+**The bass does not enter until bar 13.** Bars 1–12 measure −80 dB or below in that stem. The
+silence is real, not a detection failure.
+
+pyin was tried first and abandoned. Its `voiced_prob` runs so low on a synth bass that only 11%
+of frames clear 0.5, and the notes it returned disagreed with the recording — they matched the
+chord root 25% of the time at the bar line, where reading the same stem's spectrum directly
+gets 66%. So the extractor takes the strongest CQT bin per sixteenth, then checks an octave
+below, because a synth bass has a second harmonic loud enough to notate the whole line an
+octave high.
+
+The result is 402 notes, F1–C3, median B♭1, 46% of its duration on the chord root, with
+chromatic approach notes into the B♭ bars — a bass line, not a pitch trace.
+
+Once the bass is in, the left hand is doing two jobs at once, so it gets its own clamp rule:
+the bass note is kept whatever happens, and a shell is allowed above it out to a twelfth. You
+strike them in turn and hold with the pedal, so the gap is not a reach — but past a twelfth
+it is a different register rather than a voicing.
+
 ### Reach clamp
 
 Suno layered several keyboard tracks and the transcriber folds them into one part, so a single
