@@ -1,0 +1,29 @@
+# Audio — large binaries, not source. Regenerate from Suno / stem export.
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.aiff
+*.ogg
+audio/
+
+# Rendered output — regenerate with scripts/build_scores.py + MuseScore
+*.pdf
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pkl
+*.npy
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Editors
+.vscode/
+.idea/
+*.swp

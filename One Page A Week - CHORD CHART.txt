@@ -1,0 +1,33 @@
+ONE PAGE A WEEK  -  chord chart
+101 BPM, 4/4, key of Bb major
+bar 1 starts at 0:00
+
+0:00.0  bar   1  |   Cm7   |  Fsus4  |  Gm7b5  |   Cm7   |
+0:09.4  bar   5  |   Cm    |   Bb    | Bbsus4  |   Bb    |
+0:18.9  bar   9  |   Bb    |   Dm7   |   Gm    |   Bb    |
+0:28.4  bar  13  |   F7    |   Bb    |  Csus4  | Bbmaj7  |
+0:37.9  bar  17  |  Csus4  | Bbmaj7  |   Cm6   | Bbmaj7  |
+0:47.3  bar  21  |   Cm    |   Bb    |   Cm7   |   Bb    |
+0:56.8  bar  25  |   Cm    |   F7    |   Bb    |  Bbm6   |
+1:06.3  bar  29  |   Cm7   |   Dm7   |   Gm    |   Gm    |
+1:15.8  bar  33  |   Eb    |   Cm7   |  Fsus4  |  Fsus4  |
+1:25.3  bar  37  |   Bbm   |   Cm7   | Bbmaj7  |  Csus4  |
+1:34.7  bar  41  |   Gm7   |   Cm7   | Bbsus4  |  Gsus4  |
+1:44.2  bar  45  | Bbsus4  |   Eb    |  Fsus4  |   Gm7   |
+1:53.7  bar  49  |   Bb    | Bbsus4  |   Bbm   |   Gm7   |
+2:03.2  bar  53  |   Dm    |   Cm7   |  Adim   |   Cm7   |
+2:12.7  bar  57  |   Bb    |   Cm    |   Bb    |   Cm7   |
+2:22.2  bar  61  |  Fsus4  |   Cm7   |   Gm7   | Bbsus4  |
+2:31.6  bar  65  | Bbsus4  |   Cm7   |  Fsus4  |   Cm7   |
+2:41.1  bar  69  |   Bb    |   Eb    | Bbmaj7  |   Bb    |
+2:50.6  bar  73  |   Dm7   |  Adim   |   Bb    |   Bb    |
+3:00.1  bar  77  |   Eb    |  Fsus4  | Ebmaj7  |   Bb    |
+3:09.6  bar  81  |   Bb    |   Cm7   |  Fsus4  |  Fsus4  |
+3:19.0  bar  85  |  Fsus4  |   Bbm   |   Gm7   |   Cm7   |
+3:28.5  bar  89  |   Bb    | Bbsus4  |   Cm7   |   Bb    |
+3:38.0  bar  93  |   Gm7   |   Gm7   |   Cm7   |   Eb    |
+3:47.5  bar  97  |   Bb    |   Eb    | Bbmaj7  |   Gm    |
+3:57.0  bar 101  |   Dm7   |   Cm7   | Bbmaj7  |   Gm    |
+4:06.4  bar 105  |   Bb    |   Gm    |   Bb    | Bbmaj7  |
+4:15.9  bar 109  |   Bb    |   Gm7   | Bbsus4  |   F7    |
+4:25.4  bar 113  |  Fsus4  |
