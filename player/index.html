@@ -412,10 +412,22 @@ function computeFingering(){
    Fit finger position across the keyboard from whichever fingers are down, then
    place the other fingers on that line. Shows where the hand IS and how far it's
    stretched — the thing lit keys alone can't tell you. */
+// a tapered capsule: wide at the knuckle, narrow at the tip
+function limb(x0,y0,x1,y1,w0,w1){
+  const dx=x1-x0, dy=y1-y0, L=Math.hypot(dx,dy)||1;
+  const nx=-dy/L, ny=dx/L, a=Math.atan2(ny,nx);
+  ctx.beginPath();
+  ctx.arc(x0,y0,w0,a,a+Math.PI,true);
+  ctx.arc(x1,y1,w1,a+Math.PI,a,true);
+  ctx.closePath();
+}
+// relative finger lengths — middle longest, thumb shortest and set off to the side
+const FLEN={1:0.52,2:0.90,3:1.00,4:0.93,5:0.74};
 function drawHand(hand,pts){
   if(!pts.length) return;
+  const dir = hand==='r' ? 1 : -1;             // which way finger numbers run
+  const dflt = wKeyW*1.05*dir;
   let m,c;
-  const dflt=wKeyW*1.05*(hand==='r'?1:1);
   if(pts.length===1){ m=dflt; c=pts[0].x-m*pts[0].f; }
   else{
     const n=pts.length;
@@ -423,30 +435,91 @@ function drawHand(hand,pts){
     const sff=pts.reduce((a,p)=>a+p.f*p.f,0), sfx=pts.reduce((a,p)=>a+p.f*p.x,0);
     const den=n*sff-sf*sf;
     m = den ? (n*sfx-sf*sx)/den : dflt;
-    if(!isFinite(m)||Math.abs(m)<wKeyW*0.45) m=dflt;
+    if(!isFinite(m)||Math.abs(m)<wKeyW*0.40||Math.sign(m)!==dir) m=dflt;
     c=(sx-m*sf)/n;
   }
-  const col = hand==='r' ? '#4a9eff' : '#ff8c42';
+  const col  = hand==='r' ? '#4a9eff' : '#ff8c42';   // used only for the cuff + numbers
+  const SKIN='#e5ab80', SKIN_UP='#c58f6a', EDGE='#8d5c3c';
   const down=new Set(pts.map(p=>p.f));
-  const xs=[1,2,3,4,5].map(f=>Math.max(6,Math.min(W-6,m*f+c)));
-  const cx=xs.reduce((a,b)=>a+b,0)/5;
-  const tipY=KEYTOP+KEYH*0.34, palmY=KEYTOP+KEYH*0.90;
-  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
-  ctx.strokeStyle=col; ctx.fillStyle=col;
-  ctx.globalAlpha=0.22; ctx.beginPath();
-  ctx.ellipse(cx,palmY,Math.max(wKeyW*1.7,26),13,0,0,6.2832); ctx.fill();
-  ctx.globalAlpha=0.9; ctx.lineWidth=2.4;
-  for(let i=0;i<5;i++){
-    const f=i+1, x=xs[i], y=down.has(f)?tipY+9:tipY-7;
-    ctx.globalAlpha=down.has(f)?0.95:0.40;
-    ctx.beginPath(); ctx.moveTo(cx,palmY-4); ctx.lineTo(x,y); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x,y,down.has(f)?8:5.5,0,6.2832);
-    if(down.has(f)){ ctx.fillStyle=col; ctx.fill(); }
-    ctx.stroke();
-    if(down.has(f)){
-      ctx.fillStyle='#0b1220'; ctx.font='bold 10px system-ui'; ctx.textAlign='center';
-      ctx.fillText(f,x,y+3.5); ctx.fillStyle=col;
+  const xs=[1,2,3,4,5].map(f=>Math.max(4,Math.min(W-4,m*f+c)));
+
+  const tipDown = KEYTOP+KEYH*0.13, tipUp = KEYTOP+KEYH*0.04;
+  const knuckle = KEYTOP+KEYH*0.56;            // where fingers meet the palm
+  const palmBot = KEYTOP+KEYH*0.97;            // wrist stays on-canvas
+  const fw = Math.max(9, wKeyW*0.50);
+  const tw = fw*0.78;
+
+  ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round';
+
+  const inner = xs[1] - dir*fw*0.40, outer = xs[4] + dir*fw*0.40;
+  const L=Math.min(inner,outer), R=Math.max(inner,outer);
+  const cxp=(L+R)/2, halfW=(R-L)/2;
+  const r=Math.min(halfW*0.62,(palmBot-knuckle)*0.62);   // rounded, not a slab
+
+  // lifts the whole hand off the keys so it reads as above them
+  ctx.shadowColor='rgba(0,0,0,0.55)'; ctx.shadowBlur=14; ctx.shadowOffsetY=4;
+
+  // ---- fingers first, so the palm overlaps their bases ----
+  const drawFinger=(f)=>{
+    const isDown=down.has(f), x=xs[f-1];
+    if(f===1){
+      const ty=isDown?tipDown+KEYH*0.10:tipUp+KEYH*0.16;
+      const bx=(dir>0?L:R)+dir*fw*0.55, by=knuckle+(palmBot-knuckle)*0.68;
+      ctx.fillStyle=isDown?SKIN:SKIN_UP;
+      limb(bx,by,x,ty,fw*0.82,tw*0.58); ctx.fill();
+      ctx.strokeStyle=EDGE; ctx.lineWidth=1.3; ctx.stroke();
+      return [x,ty];
     }
+    const ty=isDown?tipDown:tipUp;
+    const ky=knuckle+2-(FLEN[f]-0.74)*KEYH*0.10;
+    const kxx=x-dir*(f-3.5)*wKeyW*0.10;
+    ctx.fillStyle=isDown?SKIN:SKIN_UP;
+    limb(kxx,ky,x,ty,fw*0.5,tw*0.5); ctx.fill();
+    ctx.strokeStyle=EDGE; ctx.lineWidth=1.3; ctx.stroke();
+    return [x,ty];
+  };
+  const tipPos={};
+  for(const f of [5,4,3,2,1]) tipPos[f]=drawFinger(f);
+
+  // ---- palm ----
+  ctx.fillStyle=SKIN;
+  ctx.beginPath();
+  ctx.moveTo(L+r,knuckle);
+  ctx.lineTo(R-r,knuckle); ctx.quadraticCurveTo(R,knuckle,R,knuckle+r);
+  ctx.lineTo(cxp+halfW*0.74,palmBot-r);
+  ctx.quadraticCurveTo(cxp+halfW*0.74,palmBot,cxp+halfW*0.74-r,palmBot);
+  ctx.lineTo(cxp-halfW*0.74+r,palmBot);
+  ctx.quadraticCurveTo(cxp-halfW*0.74,palmBot,cxp-halfW*0.74,palmBot-r);
+  ctx.lineTo(L,knuckle+r); ctx.quadraticCurveTo(L,knuckle,L+r,knuckle);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=EDGE; ctx.lineWidth=1.4; ctx.stroke();
+  ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+
+  // knuckle crease, so it doesn't read as a paddle
+  ctx.strokeStyle='rgba(141,92,60,0.45)'; ctx.lineWidth=1.1;
+  ctx.beginPath();
+  ctx.moveTo(L+fw*0.35,knuckle+fw*0.55);
+  ctx.quadraticCurveTo(cxp,knuckle+fw*0.22,R-fw*0.35,knuckle+fw*0.55);
+  ctx.stroke();
+
+  // ---- cuff: the only thing telling the two hands apart ----
+  ctx.fillStyle=col;
+  ctx.beginPath();
+  ctx.moveTo(cxp-halfW*0.72,palmBot-4);
+  ctx.lineTo(cxp+halfW*0.72,palmBot-4);
+  ctx.lineTo(cxp+halfW*0.64,palmBot+7);
+  ctx.lineTo(cxp-halfW*0.64,palmBot+7);
+  ctx.closePath(); ctx.fill();
+
+  // ---- finger numbers on the tips that are playing ----
+  ctx.textAlign='center';
+  ctx.font=`bold ${Math.max(9,Math.min(12,wKeyW*0.5))}px -apple-system,system-ui,sans-serif`;
+  for(const f of [1,2,3,4,5]){
+    if(!down.has(f)) continue;
+    const [x,ty]=tipPos[f];
+    ctx.fillStyle=col; ctx.beginPath();
+    ctx.arc(x,ty,Math.max(7,tw*0.46),0,6.2832); ctx.fill();
+    ctx.fillStyle='#0b1220'; ctx.fillText(f,x,ty+4);
   }
   ctx.restore();
 }

@@ -30,3 +30,4 @@ __pycache__/
 
 # Downloaded piano samples (fetch with scripts/fetch_piano_samples.sh)
 player/piano/
+.gstack/
