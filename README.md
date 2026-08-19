@@ -121,8 +121,16 @@ cd player && python3 -m http.server 8899
 open http://127.0.0.1:8899/
 ```
 
-Audio is gitignored, so the play-along dropdown needs two files copied into `player/`:
-`song.mp3` (full mix) and `keys.mp3` (keyboard stem).
+Audio is gitignored. Copy `song.mp3` (full mix) and `keys.mp3` (the Keyboard stem) into
+`player/`, then build the rest with `./scripts/build_playalong.sh`:
+
+| Play along | what it is | use it to |
+|---|---|---|
+| full song | the master | check yourself against the record |
+| band + vocals, no piano | everything but the Keyboard stem | be the pianist |
+| band only, no piano or vocals | drums, bass, percussion, synth | play and sing |
+| vocals only | lead + backing | hear the melody against your comping |
+| keyboard only | the part you are learning | copy the licks |
 
 **Controls:** speed down to 10%, bar-range looping, independent RH/LH toggles, a left-hand
 density mode, a reach clamp, and a "hide faint" slider. Space plays, arrows jump a bar.
