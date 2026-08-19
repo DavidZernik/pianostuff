@@ -4,6 +4,10 @@ D='/Users/davidzernik/Desktop/one page a week/'
 SPD='/private/tmp/claude-501/-Users-davidzernik-Desktop-projects-one-off-projects/001539f6-ddcc-4c28-95c3-8d29248d3a4b/scratchpad/piano/'
 d=pickle.load(open(SPD+'leadsheet.pkl','rb')); mel=d['mel']; chords=d['chords']
 BPM=101.26; beat=60/BPM; sx=beat/4; DOWN=-0.0576
+# piano_transcription_inference reports attacks ~47ms early — a third of a 16th at
+# this tempo, enough to round 8% of notes onto the wrong one. See
+# scripts/fix_onset_latency.py for how this was measured.
+LAT=0.048
 VF_RH=22          # lower floor for RH: licks include quieter notes
 VF_LH=22
 words=[]
@@ -17,8 +21,8 @@ for m in MidiFile(D+'One Page A Week - PIANO.mid'):
     if m.type=='note_on' and m.velocity>0: on.setdefault(m.note,[]).append((t,m.velocity))
     elif m.type in ('note_off','note_on'):
         if on.get(m.note): s,v=on[m.note].pop(0); kb.append([m.note,s,t,v])
-q16=lambda x:int(round((x-DOWN)/sx))            # 16th grid
-q8 =lambda x:int(round((x-DOWN)/(sx*2)))*2      # 8th grid
+q16=lambda x:int(round((x+LAT-DOWN)/sx))        # 16th grid
+q8 =lambda x:int(round((x+LAT-DOWN)/(sx*2)))*2  # 8th grid
 # RIGHT HAND at 16ths
 sl16=collections.defaultdict(dict)
 for p,s,e,v in kb:

@@ -17,6 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STEM = os.path.join(ROOT, 'audio/stems/4 Keyboard.mp3')
 NOTES = os.path.join(ROOT, 'player/notes.json')
 DUR = 277.45          # true length; the stem headers lie (see README)
+DOWN = -0.0576        # note times are grid positions; audio time is t + DOWN
 SR, HOP = 22050, 256
 FPS = SR / HOP
 
@@ -35,8 +36,9 @@ d = json.load(open(NOTES))
 scored = 0
 for n in d['notes']:
     b = n['p'] - 24
-    f0 = int(max(0, (n['t'] + 0.02) * FPS))
-    f1 = int(min(C.shape[1], (n['t'] + 0.14) * FPS))
+    at = n['t'] + DOWN                    # where this note actually sounds
+    f0 = int(max(0, (at + 0.01) * FPS))
+    f1 = int(min(C.shape[1], (at + 0.13) * FPS))
     if not (0 <= b < 84) or f1 <= f0:
         n['s'] = 50                       # out of range: stay neutral, never bias a decision
         continue

@@ -78,7 +78,17 @@ curl -L -o ~/piano_transcription_inference_data/'note_F1=0.9677_pedal_F1=0.9186.
 `cocoa`; passing `QT_QPA_PLATFORM=offscreen` aborts with exit 134. Also expect Gatekeeper to
 block the cask on first run and offer only "Move to Trash" — approve it via right-click → Open.
 
-**4. Octave errors in vocal pitch tracking are best fixed by melodic continuity, not spectra.**
+**4. The transcription model's onsets are ~47ms early.** `piano_transcription_inference`
+reports attacks a third of a sixteenth ahead of where they land in the recording, which rounds
+8% of right-hand notes onto the wrong sixteenth — always one too early. Two independent
+measurements agree: shifting all 1518 onsets and scoring where they fall peaks cleanly at
++50ms (3.35 against −0.18 unshifted, i.e. unshifted they sit on no attack at all), and taking
+each note's nearest envelope maximum gives a median of +47ms, IQR 41 to 53ms. The downbeat
+itself is fine — a comb filter over the drum stem puts the grid at 92.0ms against the
+pipeline's 90.5ms. Add the latency before quantising; `scripts/fix_onset_latency.py` repairs
+an already-built `notes.json`.
+
+**5. Octave errors in vocal pitch tracking are best fixed by melodic continuity, not spectra.**
 A spectral fundamental-vs-octave energy test flagged 14% of notes and was wrong in both
 directions. Comparing each note to the median of its neighbors and shifting by ±12 only when it
 moves closer corrected 17 notes (4%) and produced a smooth, singable line.
