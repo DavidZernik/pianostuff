@@ -101,8 +101,18 @@ moves closer corrected 17 notes (4%) and produced a smooth, singable line.
 - **Note survival** — 0 notes silently dropped by the renderer
 - **Audio ground truth** — 300 notated pitches sampled and tested for real spectral energy at
   that exact moment in the recording: **297/300 (99%)**
-- **Every note, spectrally** — `add_note_strength.py` scores all 1903; 1808 (95%) have real
+- **Every note, spectrally** — `add_note_strength.py` scores all 1903; 1824 (96%) have real
   energy at their own pitch at their own attack
+- **Recall** — the model was re-run at onset thresholds 0.30, 0.15 and 0.08 and the results
+  diffed. Lowering the threshold to 0.08 surfaces 213 right-hand notes the shipped part does
+  not have, but 29 of the 34 that clear both a control pass and an audibility test sit exactly
+  an octave, fifth or twelfth above a note already sounding — they are harmonics, not missed
+  notes. **Five hold up as genuinely missed**, 0.4% of the right hand. The right hand is not
+  missing licks; its problem was rhythm, and that was the onset latency above.
+
+  Run the control. Re-running the model at the *same* threshold reproduces only 91% of the
+  original transcription, because decoding the audio to 16kHz a different way moves the result.
+  That 9% is the noise floor any recall claim has to clear.
 
 ## Running the player
 
