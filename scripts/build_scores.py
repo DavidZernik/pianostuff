@@ -1,8 +1,15 @@
-import pickle, re, html, collections
+import json, os, re, html, collections
 from mido import MidiFile
-D='/Users/davidzernik/Desktop/one page a week/'
-SPD='/private/tmp/claude-501/-Users-davidzernik-Desktop-projects-one-off-projects/001539f6-ddcc-4c28-95c3-8d29248d3a4b/scratchpad/piano/'
-d=pickle.load(open(SPD+'leadsheet.pkl','rb')); mel=d['mel']; chords=d['chords']
+
+# Inputs all live in the repo now. The melody used to come from a pickle in a temp
+# directory, which meant the scores could not be rebuilt once that directory was
+# cleaned up; scripts/extract_melody.py regenerates it into scores/melody.json.
+ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+D=ROOT+'/'
+SCORES=ROOT+'/scores/'
+mel=json.load(open(SCORES+'melody.json'))
+_nd=json.load(open(ROOT+'/player/notes.json'))
+chords=[(c['bar'],c['t'],c['name']) for c in _nd['chords']]
 BPM=101.26; beat=60/BPM; sx=beat/4; DOWN=-0.0576
 # piano_transcription_inference reports attacks ~47ms early — a third of a 16th at
 # this tempo, enough to round 8% of notes onto the wrong one. See
@@ -15,26 +22,50 @@ for line in open(D+'One Page A Week - lyrics.txt').read().splitlines():
     l=line.strip()
     if not l or (l.startswith('[') and l.endswith(']')): continue
     words += re.findall(r"[A-Za-z’']+", l)
-kb=[];on={};t=0.0
-for m in MidiFile(D+'One Page A Week - PIANO.mid'):
-    t+=m.time
-    if m.type=='note_on' and m.velocity>0: on.setdefault(m.note,[]).append((t,m.velocity))
-    elif m.type in ('note_off','note_on'):
-        if on.get(m.note): s,v=on[m.note].pop(0); kb.append([m.note,s,t,v])
-q16=lambda x:int(round((x+LAT-DOWN)/sx))        # 16th grid
-q8 =lambda x:int(round((x+LAT-DOWN)/(sx*2)))*2  # 8th grid
-# RIGHT HAND at 16ths
-sl16=collections.defaultdict(dict)
-for p,s,e,v in kb:
-    if p<60 or v<VF_RH: continue
-    a=max(0,q16(s)); sl16[a][p]=max(sl16[a].get(p,0),max(a+1,q16(e)))
-RH={a:{p:pm[p] for p in sorted(pm)[-3:]} for a,pm in sl16.items()}
-# LEFT HAND at 8ths
-sl8=collections.defaultdict(dict)
-for p,s,e,v in kb:
-    if p>=60 or v<VF_LH: continue
-    a=max(0,q16(s)); sl8[a][p]=max(sl8[a].get(p,0),max(a+1,q16(e)))
-LH={a:{p:pm[p] for p in sorted(pm)[:3]} for a,pm in sl8.items()}
+# The player and the page are built from the same notes now: player/notes.json
+# already carries the corrected onsets (scripts/fix_onset_latency.py) and the
+# measured audibility of every note (scripts/add_note_strength.py).
+q16=lambda x:int(round(x/sx))                    # notes.json times are already grid positions
+# the melody comes straight from pyin on the vocal stem, so it is in audio time and
+# needs the downbeat — and none of the model's onset latency, which is not its bug
+q8 =lambda x:int(round((x-DOWN)/(sx*2)))*2
+REACH=12                       # semitones: what one hand can actually take
+
+def clamp(group, hand):
+    """Drop the layered doubling until the chord fits under one hand.
+
+    Suno stacked several keyboard tracks and the transcriber folds them into one
+    part, so a single attack can span 27 semitones. Keep the window holding the
+    most audible sound — a lick note that dominates the mix beats a doubled layer
+    that barely sounds. The left hand anchors on its bottom note; it has the bass.
+    """
+    g=sorted(group, key=lambda n:n['p'])
+    if len(g)<2 or g[-1]['p']-g[0]['p']<=REACH: return g
+    if hand=='l': return [n for n in g if n['p']<=g[0]['p']+REACH]
+    best=None
+    for a in g:
+        w=[n for n in g if a['p']<=n['p']<=a['p']+REACH]
+        sc=(sum(n.get('s',50) for n in w), -(w[-1]['p']-w[0]['p']))
+        if best is None or sc>best[0]: best=(sc,w)
+    return best[1]
+
+slots={'r':collections.defaultdict(list),'l':collections.defaultdict(list)}
+for n in _nd['notes']:
+    slots[n['h']][q16(n['t'])].append(n)
+
+def build(hand, keep, floor):
+    out={}
+    for a,g in slots[hand].items():
+        g=[n for n in g if n['v']>=floor]
+        if not g: continue
+        g=clamp(g,hand)
+        g=sorted(g,key=lambda n:n['p'])
+        g=g[-keep:] if hand=='r' else g[:keep]
+        out[a]={n['p']: max(a+1, q16(n['t']+n['d'])) for n in g}
+    return out
+
+RH=build('r',3,VF_RH)
+LH=build('l',3,VF_LH)
 print(f"RH {sum(len(v) for v in RH.values())} @16th | LH {sum(len(v) for v in LH.values())} @16th")
 ev=sorted([[p,max(0,q8(s)),max(q8(s)+2,q8(e))] for p,s,e in mel],key=lambda x:x[1])
 mg=[]
@@ -140,7 +171,7 @@ o=['<?xml version="1.0" encoding="UTF-8"?>',
    '<part-list>','<score-part id="P1"><part-name>Voice</part-name></score-part>',
    '<score-part id="P2"><part-name>Piano</part-name></score-part>','</part-list>',
    '<part id="P1">']+V+['</part>','<part id="P2">']+P+['</part>','</score-partwise>']
-open(D+'One Page A Week - PIANO VOCAL.musicxml','w').write('\n'.join(o))
+open(SCORES+'One Page A Week - PIANO VOCAL.musicxml','w').write('\n'.join(o))
 
 # ---------- B. right hand only ----------
 R=[]
@@ -158,5 +189,5 @@ o2=['<?xml version="1.0" encoding="UTF-8"?>',
     '<score-partwise version="3.1">','<work><work-title>One Page A Week - Right Hand</work-title></work>',
     '<part-list><score-part id="P1"><part-name>R.H.</part-name></score-part></part-list>',
     '<part id="P1">']+R+['</part>','</score-partwise>']
-open(D+'One Page A Week - RIGHT HAND.musicxml','w').write('\n'.join(o2))
+open(SCORES+'One Page A Week - RIGHT HAND.musicxml','w').write('\n'.join(o2))
 print("wrote both scores")

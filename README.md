@@ -151,8 +151,15 @@ absent from the recording, and hiding 59 of them by velocity meant hiding 708 no
 
 ## Rebuilding the scores
 
+The page and the player are built from the same notes: `build_scores.py` reads
+`player/notes.json`, so the corrected onsets, the measured audibility and the reach clamp all
+apply to the PDFs too. The sung melody used to come from a pickle in a temp directory, which
+meant the scores could not be rebuilt once that directory was cleaned — `extract_melody.py`
+regenerates it into `scores/melody.json`, which is committed.
+
 ```bash
-python3 scripts/build_scores.py
+./venv/bin/python scripts/extract_melody.py     # only if melody.json is missing
+./venv/bin/python scripts/build_scores.py
 mscore -S scripts/musescore-lyric-spacing.mss -o "scores/PIANO VOCAL.pdf" "scores/One Page A Week - PIANO VOCAL.musicxml"
 ```
 
