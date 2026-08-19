@@ -180,6 +180,10 @@ the most total `s`, ties broken toward the more compact voicing, so a lick note 
 the mix beats a doubled layer that barely sounds. The left hand anchors on its bottom note
 instead, because it is carrying the bass.
 
+Clamped notes are not hidden, they are drawn as a dashed outline. The B♭6 in bar 43 is the
+highest thing in the mix there, so making it vanish makes the app look wrong to anyone who can
+hear it. As an outline it reads as what it is: on the record, but not yours to play.
+
 At `octave max` this drops 54 right-hand notes (4.3%) and 24 left-hand (4.8%), with a median
 strength of 25 against 48 for the track as a whole — it is removing the inaudible layer. The
 loudest note of a group survives in 45 of 46 cases.

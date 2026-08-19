@@ -743,13 +743,26 @@ function render(){
   }
   for(const n of notes){
     if(n.t>t+look) break;
-    if(n.t+n.d<t-0.15||!visible(n)) continue;
+    if(n.t+n.d<t-0.15) continue;
+    const vis=visible(n);
+    /* A note the reach clamp removed is still on the record — the Bb6 in bar 43 is
+       the highest thing in the mix there. Hiding it outright makes the app look
+       wrong to anyone who can hear it, so draw it as an outline: present, but not
+       yours to play. */
+    const ghost = !vis && reachDrop.has(n) && str(n)>=simp &&
+                  (n.h==='r' ? showR : showL && (n.b ? bassOn : (!lhAllow||lhAllow.has(n))));
+    if(!vis && !ghost) continue;
     const k=keyRect(n.p), yEnd=KEYTOP-(n.t-t)*PPS, h=Math.max(11,n.d*PPS), y=yEnd-h;
     if(yEnd<0) continue;
     const on = n.t<=t && t<n.t+n.d;
-    ctx.fillStyle = n.h==='r' ? (on?'#8fc4ff':'#4a9eff') : (on?'#ffb27a':'#ff8c42');
+    const col = n.h==='r' ? (on?'#8fc4ff':'#4a9eff') : (on?'#ffb27a':'#ff8c42');
     const pad=k.black?1.5:2.5;
     roundRect(k.x+pad,Math.max(y,-40),Math.max(k.w-pad*2,3),Math.min(h,KEYTOP-y+40),3);
+    if(ghost){
+      ctx.save(); ctx.globalAlpha=0.30; ctx.strokeStyle=col; ctx.lineWidth=1.5;
+      ctx.setLineDash([4,3]); ctx.stroke(); ctx.restore(); continue;
+    }
+    ctx.fillStyle = col;
     ctx.fill();
     if(fingOn && n.f && h>=17 && k.w>=11 && yEnd>18 && yEnd<KEYTOP+6){
       ctx.fillStyle='rgba(7,13,22,0.92)';
