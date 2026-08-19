@@ -31,3 +31,6 @@ __pycache__/
 # Downloaded piano samples (fetch with scripts/fetch_piano_samples.sh)
 player/piano/
 .gstack/
+
+# Whisper transcription cache — regenerate with scripts/align_lyrics.py
+scores/.whisper-*.json

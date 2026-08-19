@@ -165,6 +165,30 @@ density mode, a reach clamp, and a "hide faint" slider. Space plays, arrows jump
 Piano sound is the Salamander Grand sampled every three semitones, so what you see and what
 you hear are always the same data.
 
+### Timed lyrics
+
+`align_lyrics.py` runs Whisper on the isolated lead vocal and transfers its word timings onto
+the real lyrics, matched by sequence. Whisper's own reading is discarded — it mishears a song
+containing "Kha boo ruh" and "dahf ha shah voo ah", but it does not need to get the words right,
+only when they happen. 200 of 354 words anchor directly (56%, in 22 runs); the rest are spaced
+between their neighbours at the song's median word gap.
+
+Only runs of two or more consecutive words are trusted as anchors. A lone "the" matching by
+chance somewhere else in the song drags every word after it, and one bad anchor does more damage
+than a hundred interpolated ones.
+
+**The vocal stem makes sound from 4.6s, but the first lyric is at 29.4s.** Those 23 seconds are a
+wordless hum: Whisper renders all of it as four "hmm"s, the syllable rate is half that of the
+sung sections, and the first verse lands on bar 13 — exactly where the bass enters. An early
+version stretched verse one back to 4.6s to fill that gap, which was wrong.
+
+Two independent checks that the alignment holds:
+
+- the second instrumental (bars 86–89) contains **no** lyric lines, and the first (43–49) contains
+  one, at bar 48, where verse two starts — a discrepancy of a bar or two at a section boundary
+- the sections land where the arrangement says they should: verse 1 at 13–34, chorus 35–42,
+  verse 2 48–66, bridge 75–83, final chorus 95–106, outro 107–110, in a song of 118 bars
+
 ### The bass line
 
 There is no bassist. Playing this alone, the left hand has to cover the bass, and the

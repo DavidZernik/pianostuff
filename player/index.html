@@ -147,6 +147,7 @@
         <label class="chk"><input id="chordHUD" type="checkbox" checked> Chord name</label>
         <label class="chk"><input id="fingNum" type="checkbox" checked> Finger numbers</label>
         <label class="chk"><input id="showHands" type="checkbox" checked> Hands</label>
+        <label class="chk"><input id="lyrOn" type="checkbox" checked> Lyrics</label>
       </div>
     </div>
 
@@ -619,6 +620,41 @@ function chordNext(s){
   for(const k of D.chords){ if(k.t>s+0.02 && k.name!==cur) return k; }
   return null;
 }
+/* Lyrics, timed word by word. The line you are on sits under the chord with the
+   current word lit; the next line waits beneath it, faint, so you know what is
+   coming while you are still singing this one. Timings come from Whisper aligned
+   against the real lyrics — see scripts/align_lyrics.py. */
+function drawLyrics(){
+  if(!LYR || !$('lyrOn').checked) return;
+  let i=-1;
+  for(let k=0;k<LYR.length;k++){ if(LYR[k].t<=t+0.25) i=k; else break; }
+  const cur = i>=0 && t<LYR[i].end+1.2 ? LYR[i] : null;
+  const nxt = LYR[i+1];
+  const top = $('chordHUD').checked ? 148 : 40;
+  ctx.save(); ctx.textAlign='center';
+  if(cur){
+    ctx.font='600 24px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+    const gap=ctx.measureText(' ').width;
+    const ws=cur.words, widths=ws.map(o=>ctx.measureText(o.w).width);
+    const total=widths.reduce((a,b)=>a+b,0)+gap*(ws.length-1);
+    ctx.fillStyle='rgba(15,17,22,0.72)';
+    roundRect(W/2-total/2-18, top-26, total+36, 40, 10); ctx.fill();
+    let x=W/2-total/2;
+    for(let k=0;k<ws.length;k++){
+      const on = ws[k].t<=t && (k===ws.length-1 || ws[k+1].t>t);
+      ctx.fillStyle = on ? '#4a9eff' : (ws[k].t<=t ? '#e9ecf2' : '#5b6377');
+      ctx.fillText(ws[k].w, x+widths[k]/2, top);
+      x+=widths[k]+gap;
+    }
+  }
+  if(nxt && (!cur || t>cur.t)){
+    ctx.font='500 16px -apple-system,BlinkMacSystemFont,system-ui,sans-serif';
+    ctx.fillStyle='#4d5567';
+    ctx.fillText(nxt.words.map(o=>o.w).join(' '), W/2, top+(cur?30:6));
+  }
+  ctx.restore();
+}
+
 function drawChordHUD(){
   if(!$('chordHUD').checked) return;
   const cur=chordAt(t), nx=chordNext(t);
@@ -738,7 +774,7 @@ function render(){
     ctx.fillStyle=a?(a==='r'?'#2f7fd6':'#d66d24'):'#141821';
     ctx.fillRect(k.x,KEYTOP,k.w,KEYH*0.62); }
   if(handsOn){ drawHand('l',handPts.l); drawHand('r',handPts.r); }
-  drawChordHUD();
+  drawChordHUD(); drawLyrics();
   $('pos').innerHTML=`bar <b>${Math.max(1,barOf(t))}</b> · ${fmt(t)} / ${fmt(D.duration)}`;
   $('chordnow').textContent=chordAt(t);
   const s=$('seek'); if(document.activeElement!==s) s.value=Math.round(t/D.duration*1000);
@@ -808,6 +844,9 @@ addEventListener('keydown',e=>{
 });
 
 /* ---------- boot ---------- */
+let LYR=null;
+fetch('lyrics.json').then(r=>r.ok?r.json():null).then(d=>{ LYR=d; }).catch(()=>{});
+
 fetch('notes.json').then(r=>r.json()).then(d=>{
   D=d; notes=d.notes; LO=d.range[0]; HI=d.range[1];
   $('loopA').max=d.nbars; $('loopB').max=d.nbars;
