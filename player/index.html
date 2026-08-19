@@ -42,6 +42,7 @@
        font-weight:650;white-space:nowrap}
   .val{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text);
        min-width:38px;font-weight:600}
+  .val.wide{min-width:84px}
 
   button{background:var(--sunk);color:var(--text);border:1px solid var(--line);
          border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:550}
@@ -113,9 +114,19 @@
           <option value="oct">root + octave</option>
           <option value="roots">roots only</option>
         </select>
-        <span class="cap">Thin</span>
-        <input id="simp" type="range" min="18" max="80" value="18">
-        <span class="val" id="simpv">all</span>
+        <span class="cap" title="hide notes that barely sound in the recording">Hide faint</span>
+        <input id="simp" type="range" min="0" max="40" value="0">
+        <span class="val wide" id="simpv">all 1903</span>
+      </div>
+    </div>
+
+    <div class="group"><span class="cap">Reach</span>
+      <div class="items">
+        <select id="reach">
+          <option value="12" selected>octave max</option>
+          <option value="16">10th max</option>
+          <option value="99">off — as transcribed</option>
+        </select>
       </div>
     </div>
 
@@ -167,7 +178,7 @@
 const $=id=>document.getElementById(id);
 const cv=$('c'), ctx=cv.getContext('2d'), ov=$('ov');
 let D=null, LO=29, HI=96, notes=[], W=0,H=0,dpr=1;
-let t=0, playing=false, speed=1, simp=18, showR=true, showL=true, last=0;
+let t=0, playing=false, speed=1, simp=0, showR=true, showL=true, last=0;
 let fingOn=true, handsOn=true;
 const PPS=190;
 let audio=null, sched=new Set(), pianoGain=null, percGain=null, BUF={}, BASES=[];
@@ -298,7 +309,46 @@ function applyLH(){
            if(keep.length===2 && keep[1].p-keep[0].p<5 && keep[0].p<48) keep=[keep[0]]; }
     for(const n of keep) lhAllow.add(n); }
 }
-const visible = n => n.v>=simp &&
+
+/* ---------- reach clamp ----------
+   Suno layered several keyboard tracks and the transcriber folds them into one
+   part, so a single attack can span 27 semitones. No hand plays that. Keep the
+   widest window a hand can actually take, picking the window that holds the most
+   *audible* sound: `s` is peak energy at that pitch measured from the recording
+   by scripts/add_note_strength.py, so a lick note that dominates the mix beats a
+   doubled layer that barely sounds. The left hand anchors on its bottom note
+   instead — it is carrying the bass, and that note is not negotiable. */
+let reachDrop=new Set();
+function applyReach(){
+  reachDrop=new Set();
+  const R=+$('reach').value;
+  if(R>=99) return;
+  for(const hand of ['r','l']){
+    const pool=notes.filter(n=>n.h===hand && (hand==='r' || !lhAllow || lhAllow.has(n)))
+                    .sort((a,b)=>a.t-b.t);
+    for(let i=0;i<pool.length;){
+      let j=i; while(j+1<pool.length && pool[j+1].t-pool[i].t<=0.03) j++;
+      const g=pool.slice(i,j+1).sort((a,b)=>a.p-b.p); i=j+1;
+      if(g.length<2 || g[g.length-1].p-g[0].p<=R) continue;
+      let win;
+      if(hand==='l'){ win=g.filter(n=>n.p<=g[0].p+R); }
+      else{
+        let best=null;
+        for(const a of g){
+          const w=g.filter(n=>n.p>=a.p && n.p<=a.p+R);
+          const sc=w.reduce((t,n)=>t+(n.s==null?50:n.s),0);
+          const sp=w[w.length-1].p-w[0].p;
+          if(!best || sc>best.sc || (sc===best.sc && sp<best.sp)) best={w,sc,sp};
+        }
+        win=best.w;
+      }
+      const keep=new Set(win);
+      for(const n of g) if(!keep.has(n)) reachDrop.add(n);
+    }
+  }
+}
+const str = n => n.s==null ? 100 : n.s;
+const visible = n => str(n)>=simp && !reachDrop.has(n) &&
   (n.h==='r' ? showR : (showL && (!lhAllow || lhAllow.has(n))));
 
 /* ---------- fingering ----------
@@ -657,13 +707,15 @@ $('rew').onclick=()=>{ t=0; sched.clear(); lastTick=-1; syncOverlay(true); };
 $('seek').oninput=e=>{ t=e.target.value/1000*D.duration; sched.clear(); lastTick=-1; syncOverlay(true); };
 $('btnR').onclick=()=>{ showR=!showR; $('btnR').classList.toggle('on',showR); computeFingering(); };
 $('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); computeFingering(); };
-$('lhmode').onchange=()=>{ applyLH(); computeFingering(); sched.clear(); };
+$('lhmode').onchange=()=>{ applyLH(); applyReach(); computeFingering(); sched.clear(); };
+$('reach').onchange=()=>{ applyReach(); computeFingering(); sched.clear(); };
 $('fingNum').onchange=e=>{ fingOn=e.target.checked; };
 $('showHands').onchange=e=>{ handsOn=e.target.checked; };
 $('speed').oninput=e=>{ speed=e.target.value/100; $('speedv').textContent=e.target.value+'%'; syncOverlay(true); };
 let simpT=null;
 $('simp').oninput=e=>{ simp=+e.target.value;
-  $('simpv').textContent= simp<=18?'all':(simp>=60?'sparse':'med');
+  const k=notes.filter(n=>str(n)>=simp).length;
+  $('simpv').textContent = simp<=0 ? 'all '+notes.length : k+' of '+notes.length;
   clearTimeout(simpT); simpT=setTimeout(computeFingering,120); };
 $('pvol').oninput=e=>{ if(pianoGain) pianoGain.gain.value=e.target.value/100; };
 $('btnP').onclick=()=>{ ac().resume(); percOn=!percOn; lastTick=-1;
@@ -694,7 +746,8 @@ addEventListener('keydown',e=>{
 fetch('notes.json').then(r=>r.json()).then(d=>{
   D=d; notes=d.notes; LO=d.range[0]; HI=d.range[1];
   $('loopA').max=d.nbars; $('loopB').max=d.nbars;
-  resize(); buildLHGroups(); applyLH(); computeFingering();
+  resize(); buildLHGroups(); applyLH(); applyReach(); computeFingering();
+  $('simpv').textContent='all '+notes.length;
   loadPiano().then(()=>{ $('boot').style.display='none'; requestAnimationFrame(frame); })
              .catch(()=>{ $('boot').style.display='none'; requestAnimationFrame(frame); });
 });

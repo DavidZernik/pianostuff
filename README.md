@@ -91,6 +91,8 @@ moves closer corrected 17 notes (4%) and produced a smooth, singable line.
 - **Note survival** — 0 notes silently dropped by the renderer
 - **Audio ground truth** — 300 notated pitches sampled and tested for real spectral energy at
   that exact moment in the recording: **297/300 (99%)**
+- **Every note, spectrally** — `add_note_strength.py` scores all 1903; 1808 (95%) have real
+  energy at their own pitch at their own attack
 
 ## Running the player
 
@@ -102,10 +104,30 @@ open http://127.0.0.1:8899/
 Audio is gitignored, so the play-along dropdown needs two files copied into `player/`:
 `song.mp3` (full mix) and `keys.mp3` (keyboard stem).
 
-**Controls:** speed down to 10%, bar-range looping, independent RH/LH toggles, and a simplify
-slider that raises the velocity floor to strip ghost notes. Space plays, arrows jump a bar.
-Piano sound is additive synthesis with string inharmonicity and per-partial decay, generated in
-the browser — so what you see and what you hear are always the same data.
+**Controls:** speed down to 10%, bar-range looping, independent RH/LH toggles, a left-hand
+density mode, a reach clamp, and a "hide faint" slider. Space plays, arrows jump a bar.
+Piano sound is the Salamander Grand sampled every three semitones, so what you see and what
+you hear are always the same data.
+
+### Reach clamp
+
+Suno layered several keyboard tracks and the transcriber folds them into one part, so a single
+attack can span 27 semitones: 46 right-hand attacks and 58 left-hand attacks exceed an octave.
+No hand plays that. The clamp keeps the widest window a hand can actually take.
+
+Which notes survive is decided by measurement, not by a rule of thumb. `scripts/add_note_strength.py`
+writes an `s` field on every note — peak CQT energy at that note's own pitch just after its
+attack, as a share of the loudest bin in the same frames. The right hand keeps the window with
+the most total `s`, ties broken toward the more compact voicing, so a lick note that dominates
+the mix beats a doubled layer that barely sounds. The left hand anchors on its bottom note
+instead, because it is carrying the bass.
+
+At `octave max` this drops 54 right-hand notes (4.3%) and 24 left-hand (4.8%), with a median
+strength of 25 against 48 for the track as a whole — it is removing the inaudible layer. The
+loudest note of a group survives in 45 of 46 cases.
+
+`s` also drives the "hide faint" slider, which MIDI velocity did badly: 87 notes are effectively
+absent from the recording, and hiding 59 of them by velocity meant hiding 708 notes in total.
 
 ## Rebuilding the scores
 
@@ -122,6 +144,9 @@ on closely-spaced notes.
 - Chord symbols are one per bar; genuine mid-bar changes show only the dominant chord
 - Lyrics are placed one word per melody note, so melismas and crowded phrases misalign
 - Right hand caps at 3 simultaneous notes (keeping the highest), left hand at 3 (lowest) —
-  dense chord stabs are thinned
+  dense chord stabs are thinned. The PDFs do not yet have the player's reach clamp
+- Six right-hand attacks stack 3+ adjacent semitones (bar 44 has 72, 73, 74 all strong). Those
+  are fast chromatic runs quantised into one frame, not chords. Fixing them needs re-timing,
+  not filtering, so they are still there
 - The transcription is faithful to generated audio that no two hands ever played; a human
   pianist's cleanup pass is still the missing step
