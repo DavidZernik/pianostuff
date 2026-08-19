@@ -266,6 +266,18 @@ loudest note of a group survives in 45 of 46 cases.
 `s` also drives the "hide faint" slider, which MIDI velocity did badly: 87 notes are effectively
 absent from the recording, and hiding 59 of them by velocity meant hiding 708 notes in total.
 
+## Pipeline order
+
+The steps mutate `player/notes.json` in place and are not commutative:
+
+```bash
+./venv/bin/python scripts/fix_onset_latency.py   # quantise onsets correctly
+./venv/bin/python scripts/extract_bass.py        # transcribe the bass stem
+./venv/bin/python scripts/merge_bass.py          # fold it into the left hand
+./venv/bin/python scripts/unstack_runs.py        # spread collapsed runs, drop duplicates
+./venv/bin/python scripts/add_note_strength.py   # measure audibility of the final set
+```
+
 ## Rebuilding the scores
 
 The page and the player are built from the same notes: `build_scores.py` reads
@@ -289,8 +301,8 @@ on closely-spaced notes.
 - Lyrics are placed one word per melody note, so melismas and crowded phrases misalign
 - Right hand caps at 3 simultaneous notes (keeping the highest), left hand at 3 (lowest) —
   dense chord stabs are thinned. The PDFs do not yet have the player's reach clamp
-- Six right-hand attacks stack 3+ adjacent semitones (bar 44 has 72, 73, 74 all strong). Those
-  are fast chromatic runs quantised into one frame, not chords. Fixing them needs re-timing,
-  not filtering, so they are still there
+- Fast runs used to arrive as one stacked attack — bar 44 held six chromatic notes at a single
+  sixteenth. `scripts/unstack_runs.py` spreads them back across the sixteenth they share,
+  ordered by the surrounding contour. Eight clusters in the song, 28 notes, three in bar 44
 - The transcription is faithful to generated audio that no two hands ever played; a human
   pianist's cleanup pass is still the missing step
