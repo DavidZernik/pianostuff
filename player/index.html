@@ -203,7 +203,7 @@ const PPS=190;
    sixteenth at this tempo is 148ms, so a run of them strobes. This is roughly what
    you still hear of the note, and roughly how long a finger really sits there. */
 const LIT=0.30, litFor = n => Math.max(n.d+0.18, LIT);
-let audio=null, sched=new Set(), pianoGain=null, percGain=null, BUF={}, BASES=[];
+let audio=null, sched=new Set(), pianoGain=null, percGain=null, ovGain=null, ovNode=null, BUF={}, BASES=[];
 let NOISE=null, percOn=false, lastTick=-1;
 /* Output latency compensation. No control on it: on wired or built-in output the
    delay is a few milliseconds and invisible. Bluetooth runs 100-300ms and would
@@ -217,8 +217,23 @@ function ac(){
     pianoGain=audio.createGain(); pianoGain.connect(audio.destination);
     setPianoGain();          // the source may already be ducking us, chosen before Play
     percGain =audio.createGain(); percGain.gain.value=0.45;  percGain.connect(audio.destination);
+    ovGain   =audio.createGain(); ovGain.connect(audio.destination);
   }
   return audio;
+}
+/* The play-along used to go straight out of the <audio> element while the piano went
+   through Web Audio. Two pipelines, two buffer depths, two different delays before
+   the speaker — so the singing and the piano did not line up, by an amount that
+   changed with the browser and the output device. Routing the element into the same
+   graph puts both on one path: whatever the output delay is, they share it, and they
+   stay locked without anyone touching a slider.
+   createMediaElementSource can only be called once per element, and from that moment
+   the element is silent unless the graph reaches the destination — so this runs once,
+   only after there is a context to attach to. */
+function hookOverlay(){
+  if(ovNode || !audio) return;
+  try{ ovNode=audio.createMediaElementSource(ov); ovNode.connect(ovGain); }
+  catch(e){ ovNode=null; console.warn('could not route play-along through Web Audio —',e.message); }
 }
 
 /* ---------- recorded piano: Salamander Grand (Yamaha C5), A. Holm, CC-BY 3.0 ---------- */
@@ -856,7 +871,7 @@ function setPlaying(v){
   $('play').classList.toggle('playing',v);
   syncOverlay(true);
 }
-$('play').onclick=()=>{ ac().resume(); setPlaying(!playing); };
+$('play').onclick=()=>{ ac().resume(); hookOverlay(); setPlaying(!playing); };
 function seekTo(x){ t=Math.max(0,Math.min(D.duration,x)); sched.clear(); lastTick=-1;
                     syncOverlay(true); }
 $('rew').onclick=()=>seekTo(0);
@@ -918,6 +933,7 @@ function applySrc(){
     $('btnP').textContent='Off'; $('pcnote').textContent='off — track has drums'; }
   else if(!(o && o.dataset.drums)) $('pcnote').textContent='';
   if(!sel.value){ ov.pause(); ov.removeAttribute('src'); return; }
+  hookOverlay();
   if(ov.getAttribute('src')===sel.value && ov.readyState>=2){ syncOverlay(true); return; }
   ov.src=sel.value; ov.volume=$('ovol').value/100; ov.load();
   /* loadedmetadata fires at readyState 1, but ovLive() wants 2, so syncOverlay
