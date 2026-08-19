@@ -165,11 +165,18 @@
       <div class="items">
         <select id="src">
           <option value="">off</option>
+          <optgroup label="you play the piano">
+            <option value="band-minus-piano.mp3">mix − piano  (band + vocals)</option>
+            <option value="bed.mp3">mix − piano − vocals  (you sing too)</option>
+          </optgroup>
+          <optgroup label="learn the part">
+            <option value="keys.mp3">piano alone</option>
+            <option value="keys-drums.mp3">piano + drums</option>
+            <option value="bass.mp3">bass alone  (your left hand)</option>
+            <option value="vocals-keys.mp3">piano + vocals</option>
+            <option value="vocals.mp3">vocals alone</option>
+          </optgroup>
           <option value="song.mp3">full song</option>
-          <option value="band-minus-piano.mp3">band + vocals, no piano</option>
-          <option value="bed.mp3">band only, no piano or vocals</option>
-          <option value="vocals.mp3">vocals only</option>
-          <option value="keys.mp3">keyboard only</option>
         </select>
         <span class="cap">Vol</span><input id="ovol" type="range" min="0" max="100" value="55">
         <span class="cap">Sync</span><input id="soff" type="range" min="-200" max="200" value="0">

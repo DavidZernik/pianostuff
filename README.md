@@ -126,11 +126,20 @@ Audio is gitignored. Copy `song.mp3` (full mix) and `keys.mp3` (the Keyboard ste
 
 | Play along | what it is | use it to |
 |---|---|---|
+| mix − piano | everything but the Keyboard stem | be the pianist |
+| mix − piano − vocals | drums, bass, percussion, synth | play and sing |
+| piano alone | the Keyboard stem | copy the licks |
+| piano + drums | keyboard, drums, percussion | put the licks in time |
+| bass alone | the Bass stem | solo the line your left hand covers |
+| piano + vocals | keyboard and both vocal stems | melody against the part |
+| vocals alone | lead + backing | hear the melody over your comping |
 | full song | the master | check yourself against the record |
-| band + vocals, no piano | everything but the Keyboard stem | be the pianist |
-| band only, no piano or vocals | drums, bass, percussion, synth | play and sing |
-| vocals only | lead + backing | hear the melody against your comping |
-| keyboard only | the part you are learning | copy the licks |
+
+Deliberately a list of mixes rather than per-stem toggles. Toggles would mean several `<audio>`
+elements each running its own clock, and they separate by tens of milliseconds over four
+minutes — audible as flamming, worst on the drums. Fixing that means reopening the single-clock
+sync, which is the thing that made the overlay line up in the first place. Not worth it to save
+a click until the list here proves too small.
 
 **Controls:** speed down to 10%, bar-range looping, independent RH/LH toggles, a left-hand
 density mode, a reach clamp, and a "hide faint" slider. Space plays, arrows jump a bar.
