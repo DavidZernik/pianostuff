@@ -39,7 +39,16 @@ C = np.abs(librosa.cqt(y, sr=sr, hop_length=HOP, fmin=librosa.midi_to_hz(LO),
 FPS = sr / HOP
 floor = np.percentile(C.sum(axis=0), 45)      # below this the bass is not playing
 
-slots = {}
+# Where a note is stamped matters as much as which note it is. Reading the loudest
+# pitch in a slot and stamping it at the slot boundary is a floor, not a round: a
+# note starting three quarters of the way through its slot is dragged a whole
+# sixteenth early, and only ever in that direction. Measured against the stem's
+# own attacks that put the bass 155ms out while the keyboard sat at 8ms — visible
+# in the player as the bass leading the right hand. So find the attack inside the
+# slot and round it the way the keyboard is rounded.
+onset = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP)
+
+best = {}
 for k in range(int(DUR / SX)):
     f0 = int((k * SX + DOWN) * FPS)
     f1 = int(((k + 1) * SX + DOWN) * FPS)
@@ -54,7 +63,14 @@ for k in range(int(DUR / SX)):
     # this bass lives at F1 to C3; anything under E1 is the correction overshooting
     # into rumble, so put it back
     if LO + b < 28: b += 12
-    slots[k] = LO + b
+    seg = onset[f0:f1]
+    if not len(seg): continue
+    at = (f0 + int(np.argmax(seg))) / FPS - DOWN
+    kk = int(round(at / SX))
+    strength = float(seg.max())
+    if kk not in best or best[kk][1] < strength: best[kk] = (LO + b, strength)
+
+slots = {k: v[0] for k, v in best.items()}
 
 # merge repeated pitches into held notes
 out, ks = [], sorted(slots)

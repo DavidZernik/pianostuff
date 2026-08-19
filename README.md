@@ -211,8 +211,20 @@ gets 66%. So the extractor takes the strongest CQT bin per sixteenth, then check
 below, because a synth bass has a second harmonic loud enough to notate the whole line an
 octave high.
 
-The result is 402 notes, F1–C3, median B♭1, 46% of its duration on the chord root, with
+The result is 496 notes, F1–C3, median B♭1, 47% of its duration on the chord root, with
 chromatic approach notes into the B♭ bars — a bass line, not a pitch trace.
+
+Where a note is stamped matters as much as which note it is. Reading the loudest pitch in a
+sixteenth-slot and stamping it at the slot boundary is a floor, not a round: a note starting
+three quarters of the way through its slot is dragged a whole sixteenth early, and only ever in
+that direction. Measured against each stem's own attacks, that put the bass **155ms out while
+the keyboard sat at 8ms** — one sixteenth is 148ms, so the bass visibly led the right hand in
+the player. The extractor now finds the attack inside the slot and rounds it the way the
+keyboard is rounded: **both parts now measure +10ms.**
+
+That comparison is the test worth running whenever a part is added from a new pipeline. The
+bass scores lower against its own attacks than the keyboard does (0.86 against 2.24) simply
+because a bass attack is softer than a piano's, not because it is misplaced.
 
 Once the bass is in, the left hand is doing two jobs at once, so it gets its own clamp rule:
 the bass note is kept whatever happens, and a shell is allowed above it out to a twelfth. You
