@@ -788,7 +788,12 @@ $('src').onchange=e=>{
   setPianoGain();
   if(!e.target.value){ ov.pause(); ov.removeAttribute('src'); return; }
   ov.src=e.target.value; ov.volume=$('ovol').value/100; ov.load();
+  /* loadedmetadata fires at readyState 1, but ovLive() wants 2, so syncOverlay
+     bailed and the new source sat there until you paused and played again.
+     canplay is the first event that clears the bar. Both are wired; calling
+     syncOverlay twice is harmless. */
   ov.onloadedmetadata=()=>syncOverlay(true);
+  ov.oncanplay=()=>syncOverlay(true);
 };
 $('lick').onclick=()=>{ $('loopA').value=43; $('loopB').value=49; $('loopOn').checked=true;
   t=timeOfBar(43); sched.clear(); lastTick=-1; if(!playing) setPlaying(true); else syncOverlay(true); };
