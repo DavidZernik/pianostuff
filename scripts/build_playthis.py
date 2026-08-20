@@ -90,11 +90,16 @@ def transcribed_licks(bars):
     return out
 
 LICK_BARS = set(list(range(1,5)) + list(range(44,48)) + list(range(85,90)) + [109,110])
+LICK_NOTES = transcribed_licks(LICK_BARS)
 if EMBELLISH:
+    # added, never substituted: the embellished score is the plain one plus these, so
+    # every note the recording plays is still in it. licks.py only writes into bars
+    # where the right hand was comping and nobody was singing.
     sys.path.insert(0, os.path.join(HERE,'scripts'))
-    from licks import LICKS as LICK_NOTES
-else:
-    LICK_NOTES = transcribed_licks(LICK_BARS)
+    from licks import LICKS as COMPOSED
+    clash = set(COMPOSED) & set(LICK_NOTES)
+    if clash: raise SystemExit('composed licks would displace the recording at bars %s' % sorted(clash))
+    LICK_NOTES = {**LICK_NOTES, **COMPOSED}   # int keys, so not dict(a, **b)
 
 # ---------------------------------------------------------------- musicxml plumbing
 def el(tag, text=None, **kw):

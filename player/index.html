@@ -986,14 +986,17 @@ Promise.all([fetch('notes.json').then(r=>r.json()),
              fetch('embellish.json').then(r=>r.json()).catch(()=>null)]).then(([d,emb])=>{
   D=d; notes=d.notes; LO=d.range[0]; HI=d.range[1];
   if(emb && emb.notes && emb.notes.length){
+    /* The recording's piano never stops — median nine right-hand notes a bar, and not
+       one bar of the song is idle — so a composed lick has nowhere to be laid on top.
+       In these bars only, it stands in for the transcription. Every bar where the
+       record plays a lick of its own is left exactly as it is. */
     const bars=new Set(emb.bars);
-    // the composed lick stands in for the transcribed one, so mark what it replaces
     for(const n of notes)
       if(n.h==='r' && bars.has(Math.floor((n.t-d.downbeat)/d.bar)+1)) n.q=1;
     notes=notes.concat(emb.notes).sort((a,b)=>a.t-b.t||a.p-b.p);
     D.notes=notes;
     for(const n of emb.notes){ LO=Math.min(LO,n.p); HI=Math.max(HI,n.p); }
-    $('rhnote').textContent=emb.bars.length+' bars';
+    $('rhnote').textContent='in '+emb.bars.length+' bars';
   } else $('rhmode').disabled=true;
   $('loopA').max=d.nbars; $('loopB').max=d.nbars;
   resize(); buildLHGroups(); applyLH(); applyReach(); computeFingering();

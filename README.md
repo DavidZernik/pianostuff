@@ -257,9 +257,16 @@ on closely-spaced notes.
 
 `PLAY THIS` writes out the licks the recording actually plays, cleaned up: the
 transcription re-strikes held notes on every sixteenth, so a sustained chord arrives as
-thirty-five notes, and the raw part is unreadable. `PLAY THIS (EMBELLISHED)` keeps
-everything else identical and swaps those four spots — intro, the fill at 1:42, the solo
-at 3:19, the tag at 4:16 — for licks written to fit.
+thirty-five notes, and the raw part is unreadable.
+
+`PLAY THIS (EMBELLISHED)` is that score plus four composed licks. It takes nothing away.
+All four recorded licks — intro, the fill at 1:42, the solo at 3:19, the tag at 4:16 —
+are byte for byte what they are in the plain score; 104 of 113 bars are untouched. The
+composed ones go where the right hand had nothing but backbeat comping and nobody was
+singing: bars 5-6, bar 10, bars 90-94, and the last bar.
+
+Bars 90-94 are the reason to bother. The recorded piano solo runs 85-89 and then hands
+over to another layer, so the piano just stops. Those five bars carry it to the end.
 
 ```bash
 ./scripts/build_playthis.py              # as recorded
@@ -272,7 +279,14 @@ other. Composed notes are marked `x` in `player/embellish.json` and live in thei
 file, deliberately: `notes.json` is transcription output and gets rebuilt, and invented
 music has no business surviving inside it.
 
+One difference worth knowing. The score comps through those nine bars, so adding a lick
+there costs nothing. The player shows the recording, and the recording's piano never
+stops — median nine right-hand notes a bar, not one idle bar in the song — so there is
+no gap to lay a lick into. In the player the composed lick stands in for the
+transcription across those nine bars, and only those. Every bar where the record plays
+a lick of its own is identical in both modes: 283 notes either way.
+
 Each lick is built on one device, so each one teaches something rather than being a
 shape to memorise: a grace-note slide into a descending line, double-stop fourths
-landing off the beat, call-and-response with the answer displaced, and fourths walking
-down to close. All four stay inside G minor pentatonic.
+landing on the "a" of the beat, call-and-response with the answer displaced, and fourths
+walking down to close. All four stay inside G minor pentatonic.
