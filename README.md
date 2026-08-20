@@ -6,12 +6,32 @@ The source track — *One Page A Week* — was generated in Suno. There is no pi
 performance to transcribe from; the "piano" is layered generated audio. This repo holds the
 pipeline that pulls a playable piano part out of it, plus a browser player for learning the licks.
 
+## The key signature says B♭. The song says G minor.
+
+Two flats, and the first pass read it as B♭ major. Re-deriving the harmony from the
+stems rather than from the notation gives a different answer: **42 bars of Gm7 and 26
+of Csus4** out of 113. The tune vamps on those two for four and a half minutes. B♭
+chords appear, but as passing colour, not as home.
+
+It matters for playing rather than for filing. Every lick in the song draws on the same
+five notes — G B♭ C D F — and calling that G minor pentatonic puts them under the hand,
+where calling it B♭ major pentatonic (identical notes) sends you looking for a tonic
+that never arrives.
+
+The mode underneath is genuinely ambiguous and is left that way. The IV chord is sus,
+so it has no third to vote with, and across the recording E♭ outweighs E natural, 0.68
+to 0.60 by pitch-class weight — natural minor rather than dorian. The composed licks
+stay inside the pentatonic, where the question never comes up.
+
 ## What's here
 
 ```
 player/          browser player — falling notes over a keyboard, RH/LH colored, play-along overlay
 scores/          MusicXML + MIDI (PDFs are gitignored — regenerate them)
+                 PLAY THIS               singalong score, licks as the record plays them
+                 PLAY THIS (EMBELLISHED) same score, composed licks instead
 scripts/         the build pipeline
+                 licks.py                the composed licks — the only non-transcribed music here
 audio/           gitignored: source mp3 and the 9 Suno stems
 ```
 
@@ -27,6 +47,7 @@ matters — getting it wrong destroys the notation.
 | **Downbeat** | t = −0.058s |
 | **Meter** | 4/4, 118 bars |
 | **Progression** | I–ii–vi–V: B♭maj7, Cm7, Gm7, F7, with Dm7 and E♭maj7 as color |
+| **Tonal centre** | **G minor**, not B♭ — see below |
 | **Vocal entry** | 4.60s (bar 3) |
 | **Instrumental sections** | bars 43–49 (1:40.7–1:52.6) and bars 86–89 |
 
@@ -231,3 +252,27 @@ on closely-spaced notes.
   ordered by the surrounding contour. Eight clusters in the song, 28 notes, three in bar 44
 - The transcription is faithful to generated audio that no two hands ever played; a human
   pianist's cleanup pass is still the missing step
+
+## Two right hands
+
+`PLAY THIS` writes out the licks the recording actually plays, cleaned up: the
+transcription re-strikes held notes on every sixteenth, so a sustained chord arrives as
+thirty-five notes, and the raw part is unreadable. `PLAY THIS (EMBELLISHED)` keeps
+everything else identical and swaps those four spots — intro, the fill at 1:42, the solo
+at 3:19, the tag at 4:16 — for licks written to fit.
+
+```bash
+./scripts/build_playthis.py              # as recorded
+./scripts/build_playthis.py --embellish  # composed licks
+./scripts/build_embellish.py             # the same licks, timed for the player
+```
+
+The player has the same switch under **Right hand**, so you can hear one against the
+other. Composed notes are marked `x` in `player/embellish.json` and live in their own
+file, deliberately: `notes.json` is transcription output and gets rebuilt, and invented
+music has no business surviving inside it.
+
+Each lick is built on one device, so each one teaches something rather than being a
+shape to memorise: a grace-note slide into a descending line, double-stop fourths
+landing off the beat, call-and-response with the answer displaced, and fourths walking
+down to close. All four stay inside G minor pentatonic.
