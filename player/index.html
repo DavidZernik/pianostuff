@@ -129,6 +129,16 @@
       </div>
     </div>
 
+    <div class="group"><span class="cap" title="everything moves together — notes, chord names and the play-along">Key</span>
+      <div class="items">
+        <select id="key">
+          <option value="0" selected>G minor — as recorded</option>
+          <option value="-3">E minor — 3 lower</option>
+        </select>
+        <span class="val wide" id="keynote"></span>
+      </div>
+    </div>
+
     <div class="group"><span class="cap" title="composed licks, not transcription — see scripts/licks.py">Right hand</span>
       <div class="items">
         <select id="rhmode">
@@ -213,6 +223,19 @@ let t=0, playing=false, speed=1, simp=0, showR=true, showL=true, last=0;
    thing stopping "what the record plays" and "what we wrote" blurring together.
    n.x marks a composed note, n.q marks a transcribed one it stands in for. */
 let embOn=false;
+/* Transposing is done by moving every note, not by a running offset: the fingering,
+   the reach clamp and the left-hand grouping all read pitches directly, and one
+   forgotten call site is a wrong note. Chord names move with them, and the play-along
+   swaps to the pitch-shifted mix — the band cannot follow you into another key. */
+let keyShift=0;
+const NOTE_SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const NOTE_FLAT =['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+function transposeName(name,semis){
+  return name.replace(/^([A-G])([#b]?)/, (m,l,acc)=>{
+    const pc=(NOTE_SHARP.indexOf(l)+(acc==='#'?1:acc==='b'?-1:0)+semis+120)%12;
+    return semis<0 ? NOTE_SHARP[pc] : NOTE_FLAT[pc];   // Em wants sharps, Gm wants flats
+  });
+}
 let fingOn=true, handsOn=true;
 const PPS=190;
 /* How long a key stays lit. The notated duration alone is too short to follow: a
@@ -905,6 +928,17 @@ $('btnL').onclick=()=>{ showL=!showL; $('btnL').classList.toggle('on',showL); co
 $('lhmode').onchange=()=>{ applyLH(); applyReach(); computeFingering(); sched.clear(); };
 $('rhmode').onchange=e=>{ embOn = e.target.value==='emb';
   applyReach(); computeFingering(); sched.clear(); lastTick=-1; };
+$('key').onchange=e=>{
+  const want=+e.target.value, delta=want-keyShift;
+  if(!delta) return;
+  keyShift=want;
+  for(const n of notes) n.p+=delta;
+  LO+=delta; HI+=delta;
+  for(const c of D.chords){ c.base=c.base||c.name; c.name=transposeName(c.base,keyShift); }
+  $('keynote').textContent = keyShift ? keyShift+' semitones' : '';
+  applyLH(); applyReach(); computeFingering(); applySrc();
+  sched.clear(); lastTick=-1; resize();
+};
 $('reach').onchange=()=>{ applyReach(); computeFingering(); sched.clear(); };
 $('bassOn').onchange=e=>{ bassOn=e.target.checked; applyReach(); computeFingering(); sched.clear(); };
 $('fingNum').onchange=e=>{ fingOn=e.target.checked; };
@@ -958,8 +992,10 @@ function applySrc(){
   else if(!(o && o.dataset.drums)) $('pcnote').textContent='';
   if(!sel.value){ ov.pause(); ov.removeAttribute('src'); return; }
   hookOverlay();
-  if(ov.getAttribute('src')===sel.value && ov.readyState>=2){ syncOverlay(true); return; }
-  ov.src=sel.value; ov.volume=$('ovol').value/100; ov.load();
+  // the dropdown names the mix; the key decides which pressing of it to load
+  const want = keyShift ? sel.value.replace(/\.mp3$/,'-Em.mp3') : sel.value;
+  if(ov.getAttribute('src')===want && ov.readyState>=2){ syncOverlay(true); return; }
+  ov.src=want; ov.volume=$('ovol').value/100; ov.load();
   /* loadedmetadata fires at readyState 1, but ovLive() wants 2, so syncOverlay
      bailed and the new source sat there until you paused and played again.
      canplay is the first event that clears the bar.

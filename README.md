@@ -29,7 +29,8 @@ stay inside the pentatonic, where the question never comes up.
 player/          browser player — falling notes over a keyboard, RH/LH colored, play-along overlay
 scores/          MusicXML + MIDI (PDFs are gitignored — regenerate them)
                  PLAY THIS               singalong score, licks as the record plays them
-                 PLAY THIS (EMBELLISHED) same score, composed licks instead
+                 PLAY THIS (EMBELLISHED) same score, plus four composed licks
+                 ... (Em)                both of those, three semitones lower
 scripts/         the build pipeline
                  licks.py                the composed licks — the only non-transcribed music here
 audio/           gitignored: source mp3 and the 9 Suno stems
@@ -290,3 +291,31 @@ Each lick is built on one device, so each one teaches something rather than bein
 shape to memorise: a grace-note slide into a descending line, double-stop fourths
 landing on the "a" of the beat, call-and-response with the answer displaced, and fourths
 walking down to close. All four stay inside G minor pentatonic.
+
+## Two keys
+
+The song is in G minor and it does not fit an untrained voice. The melody lives on G4
+and reaches B♭4 seven times, with one C♯5 in bar 97 that is not worth choosing a key
+around. B♭4 is the note that bites.
+
+Three semitones down puts B♭4 on G4 — the note the melody already sits on twenty-six
+times without trouble — and lands the whole thing in E minor. The hand does better too:
+the piano part goes from **30% black keys to 4%**, and every chord root becomes a white
+key, because E minor pentatonic is E G A B D and the vocabulary turns into Em7, Am7,
+D7sus4, Cmaj7.
+
+```bash
+./scripts/build_playthis.py --down 3                 # score in Em
+./scripts/build_playthis.py --embellish --down 3
+./scripts/build_transposed_playalong.sh 3            # and the play-alongs to match
+```
+
+The player has a **Key** switch that moves the notes, the chord names and the backing
+track together. That last part is the reason the transposed mixes have to exist: the
+recording cannot follow you into another key, so each mix is pitch-shifted to a second
+pressing and the dropdown picks whichever matches the key you are in.
+
+This ffmpeg has no rubberband, so the shift is asetrate then atempo — drop pitch and
+speed together, then put the speed back. Three semitones is a 12% stretch and comes
+through clean; verified at exactly 3 semitones by chroma rotation, with the duration
+unchanged at 277.5s.

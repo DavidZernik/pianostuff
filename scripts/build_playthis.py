@@ -3,6 +3,11 @@
 
     ./scripts/build_playthis.py              -> One Page A Week - PLAY THIS.musicxml
     ./scripts/build_playthis.py --embellish  -> ... - PLAY THIS (EMBELLISHED).musicxml
+    ./scripts/build_playthis.py --down 3     -> ... - PLAY THIS (Em).musicxml
+
+--down moves the whole thing to a lower key. Three semitones takes it from G minor to
+E minor: the pentatonic loses its last black key, and the top note you actually sing
+repeatedly, Bb4, lands on G4 — the note the melody already sits on twenty-six times.
 
 Right hand comps on the backbeat so there is room to sing, and gives way to a lick
 where the record plays one. The two builds differ only in which licks those are:
@@ -20,6 +25,8 @@ SCORES = os.path.join(HERE, 'scores')
 DIV    = 4                                    # divisions per quarter -> sixteenths
 NBARS  = 113
 EMBELLISH = '--embellish' in sys.argv
+DOWN_ST = int(sys.argv[sys.argv.index('--down')+1]) if '--down' in sys.argv else 0
+KEY_NAME = {0:'', 3:'Em', 2:'Fm', 5:'Dm'}.get(DOWN_ST, 'down%d' % DOWN_ST)
 
 PC   = {'C':0,'C#':1,'D':2,'Eb':3,'E':4,'F':5,'F#':6,'G':7,'Ab':8,'A':9,'Bb':10,'B':11}
 STEP = {0:('C',0),1:('C',1),2:('D',0),3:('E',-1),4:('E',0),5:('F',0),
@@ -29,7 +36,13 @@ QUAL = {'':[0,4,7],'6':[0,4,7,9],'maj7':[0,4,7,11],'m':[0,3,7],'m7':[0,3,7,10],
 KIND = {'':'major','6':'major-sixth','maj7':'major-seventh','m':'minor','m7':'minor-seventh',
         '7':'dominant','sus4':'suspended-fourth','7sus4':'suspended-fourth','m7b5':'half-diminished'}
 TEXT = {'':'','6':'6','maj7':'maj7','m':'m','m7':'m7','7':'7','sus4':'sus4','7sus4':'7sus4','m7b5':'m7b5'}
-SCALE = {10,0,2,3,5,7,9}                      # Bb C D Eb F G A
+SCALE = {10,0,2,3,5,7,9}                      # Bb C D Eb F G A, in the original key
+FIFTHS = -2                                   # Bb major
+if DOWN_ST:
+    FIFTHS = ((FIFTHS - DOWN_ST*7) + 6) % 12 - 6      # -3 semitones -> +1, i.e. G major
+    SCALE = {(p - DOWN_ST) % 12 for p in SCALE}
+def tr(m):  return m - DOWN_ST                # a midi note in the new key
+def trpc(p): return (p - DOWN_ST) % 12        # a pitch class in the new key
 
 d = json.load(open(os.path.join(SCORES,'derived-harmony.json')))
 HARMONY, BASS = d['harmony'], d['bass_by_beat']
@@ -145,10 +158,13 @@ lead = ET.parse(os.path.join(SCORES,'One Page A Week - LEAD SHEET.musicxml'))
 lmeasures = {int(m.get('number')): m for m in lead.getroot().find('.//part').findall('measure')}
 
 score = el('score-partwise', version='4.0')
-w = el('work'); w.append(el('work-title','One Page A Week' + (' — embellished right hand' if EMBELLISH else '')))
+w = el('work'); w.append(el('work-title','One Page A Week'
+            + (' — embellished right hand' if EMBELLISH else '')
+            + (' — in %s' % KEY_NAME if DOWN_ST else '')))
 score.append(w)
 ident = el('identification'); enc = el('encoding')
-enc.append(el('software','scripts/build_playthis.py' + (' --embellish' if EMBELLISH else '')))
+enc.append(el('software','scripts/build_playthis.py' + (' --embellish' if EMBELLISH else '')
+              + (' --down %d' % DOWN_ST if DOWN_ST else '')))
 ident.append(enc); score.append(ident)
 pl = el('part-list')
 for pid, nm in (('P1','Voice'),('P2','Piano')):
@@ -161,7 +177,7 @@ for b in range(1, NBARS+1):
     m = el('measure', number=str(b))
     if b == 1:
         at = el('attributes'); at.append(el('divisions',DIV))
-        k = el('key'); k.append(el('fifths',-2)); at.append(k)
+        k = el('key'); k.append(el('fifths',FIFTHS)); at.append(k)
         t = el('time'); t.append(el('beats',4)); t.append(el('beat-type',4)); at.append(t)
         c = el('clef'); c.append(el('sign','G')); c.append(el('line',2))
         c.append(el('clef-octave-change','-1')); at.append(c)
@@ -170,8 +186,9 @@ for b in range(1, NBARS+1):
         mt = el('metronome'); mt.append(el('beat-unit','quarter')); mt.append(el('per-minute','101'))
         dt.append(mt); dr.append(dt); m.append(dr)
     lbl = HARMONY[b-1]; r,q = split(lbl)
-    h = el('harmony'); rt = el('root'); rt.append(el('root-step', r[0]))
-    if len(r) > 1: rt.append(el('root-alter', -1 if r[1]=='b' else 1))
+    rs, ra = STEP[trpc(PC[r])]
+    h = el('harmony'); rt = el('root'); rt.append(el('root-step', rs))
+    if ra: rt.append(el('root-alter', ra))
     h.append(rt)
     kd = ET.Element('kind'); kd.text = KIND[q]; kd.set('text', TEXT[q]); h.append(kd)
     m.append(h)
@@ -183,6 +200,19 @@ for b in range(1, NBARS+1):
             n = copy.deepcopy(e)
             st = n.find('staff')
             if st is not None: n.remove(st)
+            pit = n.find('pitch')
+            if pit is not None and DOWN_ST:
+                cur = (int(pit.findtext('octave'))+1)*12 + PC[pit.findtext('step')] \
+                      + int(pit.findtext('alter') or 0)
+                ns_, na = STEP[trpc(cur)]
+                pit.find('step').text = ns_
+                al = pit.find('alter')
+                if na:
+                    (al if al is not None else pit.makeelement('alter',{})).text = str(na)
+                    if al is None:
+                        a2 = el('alter', na); pit.insert(list(pit).index(pit.find('step'))+1, a2)
+                elif al is not None: pit.remove(al)
+                pit.find('octave').text = str(tr(cur)//12 - 1)
             m.append(n)
     p1.append(m)
 score.append(p1)
@@ -193,7 +223,7 @@ for b in range(1, NBARS+1):
     m = el('measure', number=str(b))
     if b == 1:
         at = el('attributes'); at.append(el('divisions',DIV))
-        k = el('key'); k.append(el('fifths',-2)); at.append(k)
+        k = el('key'); k.append(el('fifths',FIFTHS)); at.append(k)
         t = el('time'); t.append(el('beats',4)); t.append(el('beat-type',4)); at.append(t)
         at.append(el('staves',2))
         for num, sign, line in (('1','G',2),('2','F',4)):
@@ -207,11 +237,12 @@ for b in range(1, NBARS+1):
             if pos > cur: emit(m, None, pos-cur, '1', '1'); cur = pos
             dur = min(dur, 16-cur)
             if dur <= 0: break
-            emit(m, None if pitch is None else (pitch if isinstance(pitch,list) else [pitch]),
+            emit(m, None if pitch is None else
+                 [tr(x) for x in (pitch if isinstance(pitch,list) else [pitch])],
                  dur, '1', '1'); cur += dur
         if cur < 16: emit(m, None, 16-cur, '1', '1')
     else:
-        ch = voicing(HARMONY[b-1])
+        ch = [tr(x) for x in voicing(HARMONY[b-1])]
         for kind in (None,'hit',None,'hit'):          # rest 1, hit 2, rest 3, hit 4
             emit(m, ch if kind else None, 4, '1', '1')
     m.append(el('backup')); m[-1].append(el('duration',16))
@@ -219,7 +250,7 @@ for b in range(1, NBARS+1):
     beats = BASS[(b-1)*4:(b-1)*4+4]
     if all(x is None for x in beats):
         r,q = split(HARMONY[b-1])
-        emit(m, [48 + PC[r] % 12], 16, '2', '5')
+        emit(m, [tr(48 + PC[r] % 12)], 16, '2', '5')
     else:
         runs = []
         for x in beats:
@@ -227,7 +258,7 @@ for b in range(1, NBARS+1):
             else: runs.append([x,4])
         for pit, dur in runs:
             if pit is not None:
-                pit += 12                                   # into playable register
+                pit = tr(pit) + 12                          # into playable register
                 while pit < 40: pit += 12
                 while pit > 64: pit -= 12
                 if pit % 12 not in SCALE:                   # kill pitch-tracker artifacts
@@ -238,7 +269,8 @@ for b in range(1, NBARS+1):
 score.append(p2)
 
 ET.indent(score, space='  ')
-name = 'One Page A Week - PLAY THIS' + (' (EMBELLISHED)' if EMBELLISH else '') + '.musicxml'
+name = ('One Page A Week - PLAY THIS' + (' (EMBELLISHED)' if EMBELLISH else '')
+        + (' (%s)' % KEY_NAME if DOWN_ST else '') + '.musicxml')
 out = os.path.join(SCORES, name)
 with open(out,'w') as f:
     f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
