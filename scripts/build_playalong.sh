@@ -57,6 +57,10 @@ mix bass.mp3              "3 Bass"
 mix bass-drums.mp3        "3 Bass" "2 Drums" "5 Percussion"
 mix vocals-bass-drums.mp3 "0 Lead Vocals" "1 Backing Vocals" "3 Bass" "2 Drums" "5 Percussion"
 mix keys-bass-vocals.mp3  "4 Keyboard" "3 Bass" "0 Lead Vocals" "1 Backing Vocals"
+# The band with both your jobs removed: no keyboard to fight the part you are playing,
+# no vocal to sing over you. Synth, Other and Brass stay — they carry the horn stabs and
+# the layer that takes the solo at bar 88, which are not the piano part.
+mix band.mp3              "2 Drums" "3 Bass" "5 Percussion" "6 Synth" "7 Other" "8 Brass"
 ffmpeg -v error -y -i "audio/One Page A Week copy.mp3" -t "$D" -c:a libmp3lame -q:a 4 player/.song.mp3
 level player/.song.mp3 song.mp3
 rm -f player/bed.mp3 player/band-minus-piano.mp3 player/keys-drums.mp3 player/vocals-keys.mp3 player/keys.mp3
