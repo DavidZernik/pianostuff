@@ -224,6 +224,7 @@ let NOISE=null, percOn=false, lastTick=-1;
 /* Output latency compensation. No control on it: on wired or built-in output the
    delay is a few milliseconds and invisible. Bluetooth runs 100-300ms and would
    need this — put a slider back on it if that ever comes up. */
+const LOOKAHEAD=0.10;            // seconds of runway for exact scheduling
 let syncOff=0, ovErr='', aRef=null, wRef=0, seekGoal=null, seekAt=0, seekWarned=false;
 
 /* ---------- audio graph ---------- */
@@ -267,7 +268,11 @@ async function loadPiano(){
   return BASES.length;
 }
 const nearestBase = m => BASES.reduce((b,x)=>Math.abs(x-m)<Math.abs(b-m)?x:b,BASES[0]);
-function playNote(midi,dur,vel,hand){
+/* `when` is seconds from now. The frame loop used to fire a note the moment it noticed
+   the note was due, which pins every attack to a frame boundary and scatters it by up
+   to a frame — audible against a recording that is sample accurate. Scheduling a
+   little ahead at an exact graph time takes the render loop out of the timing path. */
+function playNote(midi,dur,vel,hand,when){
   const a=ac(), base=nearestBase(midi), buf=BUF[base];
   if(!buf) return;
   const src=a.createBufferSource(); src.buffer=buf;
@@ -277,7 +282,7 @@ function playNote(midi,dur,vel,hand){
   lp.frequency.value=Math.min(18000,1400+15000*Math.pow(v,1.25));
   const g=a.createGain();
   const amp=(0.20+0.80*Math.pow(v,1.2))*(hand==='l'?0.86:1)*0.85;
-  const now=a.currentTime, hold=Math.max(0.10,Math.min(dur/speed,4.0));
+  const now=a.currentTime+Math.max(0,when||0), hold=Math.max(0.10,Math.min(dur/speed,4.0));
   g.gain.setValueAtTime(amp,now);
   g.gain.setValueAtTime(amp,now+hold);
   g.gain.exponentialRampToValueAtTime(0.0006,now+hold+0.30);
@@ -795,8 +800,9 @@ function frame(ts){
     }
     if(t>D.duration){ t=D.duration; setPlaying(false); }
     for(const n of notes){
-      if(n.t>t) break;
-      if(n.t>t-0.09 && visible(n) && !sched.has(n)){ sched.add(n); playNote(n.p,n.d,n.v,n.h); }
+      if(n.t>t+LOOKAHEAD*speed) break;
+      if(n.t>t-0.09 && visible(n) && !sched.has(n)){
+        sched.add(n); playNote(n.p,n.d,n.v,n.h,(n.t-t)/speed); }
     }
     if(sched.size>500) sched.clear();
     tickPerc();
